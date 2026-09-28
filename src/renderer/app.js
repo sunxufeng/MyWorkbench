@@ -52,7 +52,7 @@ const state = {
   },
   migratedFrom: null,
   focusMode: false,
-  view: 'all', // all | trash | calendar | cat:<name> | tag:<name>
+  view: 'overview', // overview | all | trash | calendar | cat:<name> | tag:<name>
   q: '',
   filterType: '',
   filterTag: '',
@@ -397,6 +397,7 @@ function renderSidebar() {
   };
 
   const todayN = todayOccurrences().length;
+  mk('overview', '◧', '总览', '', '');
   mk('calendar', '▦', '日历', todayN ? `${todayN} 今日` : '', '');
   mk('all', '▤', '全部资料', st.total);
   mk('trash', '🗑', '回收站', st.trashed + (st.schedules ? st.schedules.trashed : 0));
@@ -568,15 +569,19 @@ function renderListControls() {
   if ($('#searchInput').value !== state.q) $('#searchInput').value = state.q;
 }
 
-/** 中栏在「列表模式 / 日历模式」之间切换外观 */
+/** 中栏在「列表模式 / 日历模式 / 总览模式」之间切换外观 */
 function setPaneMode() {
   const cal = state.view === 'calendar';
+  const ov = state.view === 'overview';
   const app = $('#app');
-  if (app) app.classList.toggle('cal-mode', cal);
+  if (app) {
+    app.classList.toggle('cal-mode', cal);
+    app.classList.toggle('ov-mode', ov);
+  }
   const head = $('#calHead');
   if (head) head.classList.toggle('hidden', !cal);
   const lh = $('#listHead');
-  if (lh) lh.classList.toggle('cal-mode', cal);
+  if (lh) lh.classList.toggle('hidden', cal || ov);
   const sb = $('#listScroll');
   if (sb) sb.classList.toggle('cal-scroll', cal);
   const si = $('#searchInput');
@@ -584,6 +589,12 @@ function setPaneMode() {
 }
 
 function renderList() {
+  // 离开总览页时，停掉秒级时钟定时器，避免泄漏
+  if (state._ovTimer) {
+    clearInterval(state._ovTimer);
+    state._ovTimer = null;
+  }
+  if (state.view === 'overview') return; // 总览占用整块详情区，列表栏隐藏
   setPaneMode();
   if (state.view === 'calendar') return renderCalendar();
 
@@ -2096,6 +2107,9 @@ function mkTb(label, cls, onclick, title) {
 }
 
 function renderDetail() {
+  if (state.view === 'overview') {
+    return renderOverviewPage();
+  }
   if (state.view === 'calendar') return renderCalendarDetail();
   if (state.editing) return renderEditor();
   const e = state.entries.find((x) => x.id === state.selectedId);
@@ -2349,6 +2363,266 @@ async function openUrl(url) {
   if (!url) return;
   const r = await act(API.openExternal(url));
   if (!r) toast('链接格式不支持，只能打开 http/https', 'err');
+}
+
+/* ----------------------------------------------------- 默认总览仪表盘 */
+
+function ovGreeting(h) {
+  if (h < 5) return '夜深了，注意休息';
+  if (h < 11) return '早上好';
+  if (h < 13) return '中午好';
+  if (h < 18) return '下午好';
+  if (h < 23) return '晚上好';
+  return '夜深了，注意休息';
+}
+
+function ovPad(n) {
+  return String(n).padStart(2, '0');
+}
+
+function ovDateLine(d) {
+  const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
+  const solar = `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · 星期${wd}`;
+  let lunar = '';
+  if (window.Lunar) {
+    const L = window.Lunar.solarToLunar(d.getFullYear(), d.getMonth() + 1, d.getDate());
+    if (!L.error) lunar = `农历 ${L.yearCn}${L.monthCn}${L.dayCn}` + (L.term ? ` · ${L.term}` : '');
+  }
+  return { solar, lunar };
+}
+
+// 每日冷知识（按一年中的第几天轮换，覆盖全年不重复）
+const OV_TRIVIA = [
+  { q: '为什么猫从高处摔下常常没事？', a: '猫的内耳有超强平衡器官，空中能迅速翻转身体四脚着地；加上柔韧脊柱与较低体重，落地冲击被大幅缓冲。但太高仍会受伤，并非真的“摔不死”。' },
+  { q: '蜂蜜为什么几乎不会坏？', a: '蜂蜜含糖量极高、水分极少，渗透压让细菌脱水；自身还含少量过氧化氢。考古曾出土过三千年仍能吃的蜂蜜，但一旦掺水发酵就另当别论。' },
+  { q: '“一眨眼”到底有多快？', a: '人类眨眼约 100–150 毫秒，一天要眨上万次，累计闭眼时间超过一小时。它给眼球补泪液、短暂“重启”视觉，却几乎不耽误我们看世界。' },
+  { q: '章鱼有几颗心脏？', a: '三只。两颗专门把血液泵过鳃部吸氧，一颗负责全身循环。更奇特的是章鱼血是蓝色的——靠含铜的血蓝蛋白运氧，低温海里效率更高。' },
+  { q: '向日葵白天真的跟着太阳转吗？', a: '花苞期会随太阳从东转到西，靠茎部生长素分布变化；但盛开后大多固定朝东，好让清晨的阳光更快烘干露水、吸引传粉昆虫。' },
+  { q: '闪电的温度能超过太阳表面吗？', a: '能。一道闪电通道温度可达 3 万摄氏度，约为太阳表面（约 5500℃）的 5 倍。它瞬间把空气加热膨胀，这就是雷声的来源。' },
+  { q: '香蕉其实是浆果，草莓却不是？', a: '植物学上，由单一子房发育、含多枚种子的果肉才算浆果——香蕉、番茄、葡萄都算；草莓的“籽”才是真果实，它属于聚合果。' },
+  { q: '人的指纹为什么独一无二？', a: '指纹在胎儿期由皮下组织生长速度差异“挤”出来，受基因与子宫内环境（如羊水流动）共同影响，连同卵双胞胎也不尽相同。' },
+  { q: '树会“睡觉”吗？', a: '会。用激光扫描发现，夜晚树木枝条会微微下垂、叶片角度改变，像进入休息态；日出后重新“起身”。这可能与水分和昼夜节律有关。' },
+  { q: '为什么切洋葱会让人流泪？', a: '洋葱被破坏时释放酶，把前体物质变成刺激性的硫化合物，飘到眼里生成微量硫酸。冷藏后再切、或用锋利刀快速切断，都能显著减轻。' },
+  { q: '海獭睡觉为什么要牵手？', a: '它们浮在海面休息，会彼此牵爪或裹进海藻里，防止被洋流冲散。这种“牵手睡”既保温又保平安，是出了名的可爱习性。' },
+  { q: '地球最深的洞穴有多深？', a: '格鲁吉亚的库鲁伯亚洞穴已探明超过 2200 米深，相当于把七座埃菲尔铁塔叠起来。越深越热，底部温度可达 30℃ 以上。' },
+  { q: '企鹅其实是“飞行”的鸟？', a: '企鹅的翅膀演化成鳍状肢，在海里像翅膀一样划水“飞行”，速度可达每小时 30 公里；只是它们的“天空”是水。它们仍属于会飞的鸟类分支。' },
+  { q: '人的胃为什么不会消化自己？', a: '胃壁分泌强酸与蛋白酶，却靠厚厚的黏液层隔绝，并不断快速更新细胞。一旦黏液屏障破损，就会形成溃疡——所谓“胃自残”。' },
+  { q: '云其实重得惊人？', a: '一朵普通积云含水数百吨，全靠无数微小水滴的浮力与上升气流托着。一旦水滴变大变重、上升气流托不住，就化作雨落下。' },
+  { q: '为什么打哈欠会“传染”？', a: '研究认为这与脑的散热、警觉度调节以及镜像神经元（共情）有关。看到别人打哈欠，约半数人会不由自主跟着打。' },
+  { q: '蜗牛能睡上三年？', a: '在极端干旱或寒冷时，某些蜗牛会分泌黏液封住壳口进入休眠，代谢降到极低，可长达数年；一旦环境湿润回暖便苏醒。' },
+  { q: '雪为什么看起来是白的？', a: '雪花是透明冰晶，但无数晶面把各色光线反复散射、混合，最终所有颜色一起进入眼睛，就被看成白色——和泡沫、砂糖同理。' },
+  { q: '人有“第三只眼”的痕迹吗？', a: '大脑中的松果体被认为源于远古脊椎动物的头顶感光器官（顶眼），如今负责分泌褪黑素调节昼夜节律，可说是退化残留的“第三眼”。' },
+  { q: '为什么猫踩奶会一脸满足？', a: '幼猫吃奶时用爪交替按压母猫乳房促泌乳；长大后这个动作被保留为安心信号，伴随“咕噜”声，常出现在放松、想念母亲的时刻。' },
+  { q: '一棵大树的水分怎么爬到顶端？', a: '靠蒸腾拉力：叶片失水形成负压，像吸管把水从根一路拉到百米高的树梢，再借毛细与内聚力不断链——纯物理，不用“泵”。' },
+  { q: '海马的爸爸会生宝宝？', a: '在动物界很少见：雌性把卵产进雄性腹部的育儿囊，由雄性受精、孵化并“分娩”小海马，妈妈只负责产卵。' },
+  { q: '人的骨头会比出生时多吗？', a: '婴儿约有 300 块软骨骼，成长中许多会融合，成人只剩 206 块左右。所以成年人骨数反而比婴儿“少”。' },
+  { q: '为什么天越热，电线越下垂？', a: '金属热胀冷缩，夏天导线变长、弧垂增大；冬天缩短绷紧。架设时要预留弧垂与张力，否则冷热交替可能拉断或触碰。' },
+  { q: '蜜蜂怎样告诉同伴花在哪？', a: '跳“摇摆舞”：舞圈中直线跑的方向对应太阳夹角，时长对应距离。同伴据此算出方位与远近，堪称精密的“舞蹈地图”。' },
+  { q: '骆驼的驼峰存的是水吗？', a: '不是，驼峰存的是脂肪，饥饿时供能；缺水时脂肪代谢还能产生水。真正蓄水靠的是血液与肠道，一次能豪饮上百升。' },
+  { q: '为什么伤口痒说明在愈合？', a: '新生的神经末梢和组胺等修复信号在皮下活跃，刺激产生痒感；抓挠易撕开新组织、引入感染，所以“痒”是身体叫你别动它。' },
+  { q: '北极熊的皮肤其实是黑的？', a: '毛发透明中空、把光散射成白色伪装雪地，但底下皮肤是黑的，能更好吸收阳光保暖。它看上去白，只是“毛色”的错觉。' },
+  { q: '一年其实不是精确的 365 天？', a: '地球绕日约 365.2422 天，所以公历四年一闰、百年少一闰、四百年又闰，用这套规则把零头慢慢抹平，才不至于季节错位。' },
+];
+
+function pickTrivia(d) {
+  const start = new Date(d.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((d - start) / 86400000);
+  return OV_TRIVIA[dayOfYear % OV_TRIVIA.length];
+}
+
+function loadWeather() {
+  const box = $('#ovWeather');
+  if (!box) return;
+  const city = (state.prefs && state.prefs.weatherCity) || '上海';
+  box.innerHTML =
+    `<div class="ov-card-h">📍 ${esc(city)} · 天气</div>` +
+    `<div class="ov-card-b"><div class="ov-w-load">正在获取天气…</div></div>`;
+  API.weather
+    .get(city)
+    .then((r) => renderWeather(box, r, city))
+    .catch(() => renderWeatherError(box, '天气获取失败，稍后重试'));
+}
+
+function renderWeather(box, r, city) {
+  if (!r || r.ok === false) {
+    renderWeatherError(box, (r && r.error) || '天气获取失败');
+    return;
+  }
+  const cur = r.current || {};
+  const daily = (r.daily || []).slice(0, 5);
+  const head =
+    `<div class="ov-card-h">📍 ${esc(r.resolvedName || city)} · 天气` +
+    (r.stale ? ' <span class="ov-stale">离线缓存</span>' : '') +
+    `</div>`;
+  const now =
+    `<div class="ov-w-now">` +
+    `<div class="ov-w-icon">${cur.icon || '🌡'}</div>` +
+    `<div class="ov-w-main">` +
+    `<div class="ov-w-temp">${cur.temp != null ? cur.temp + '°' : '—'}</div>` +
+    `<div class="ov-w-desc">${esc(cur.desc || '')}${cur.feels != null ? ' · 体感 ' + cur.feels + '°' : ''}</div>` +
+    `</div>` +
+    `<div class="ov-w-meta">` +
+    (cur.humidity != null ? `<div>湿度 ${cur.humidity}%</div>` : '') +
+    (cur.wind != null ? `<div>风速 ${cur.wind} m/s</div>` : '') +
+    `</div></div>`;
+  const fc = daily
+    .map((d) => {
+      const wd = ['日', '一', '二', '三', '四', '五', '六'][new Date(d.date + 'T00:00:00').getDay()];
+      const label = d.date === todayStr() ? '今天' : '周' + wd;
+      return (
+        `<div class="ov-w-day"><div class="ov-w-dl">${label}</div>` +
+        `<div class="ov-w-di">${d.icon || ''}</div>` +
+        `<div class="ov-w-dt">${d.tmax != null ? d.tmax + '°' : '—'}/${d.tmin != null ? d.tmin + '°' : '—'}</div></div>`
+      );
+    })
+    .join('');
+  box.innerHTML = head + `<div class="ov-card-b">${now}<div class="ov-w-fc">${fc}</div></div>`;
+}
+
+function renderWeatherError(box, msg) {
+  box.innerHTML =
+    `<div class="ov-card-h">📍 天气</div><div class="ov-card-b"><div class="ov-w-err">${esc(msg)}` +
+    `<br><button class="tb" id="ovWRetry">重试</button></div></div>`;
+  const b = $('#ovWRetry');
+  if (b) b.onclick = () => loadWeather();
+}
+
+/** 默认落地页：总览仪表盘（秒级时钟 / 农历 / 星期 / 天气 / 今日安排 / 快捷操作 / 数据概览 / 最近资料 / 每日冷知识） */
+function renderOverviewPage() {
+  const st = state.stats;
+  const scroll = $('#detailScroll');
+  scroll.innerHTML = '';
+  renderDetailBar([]);
+  const wrap = el('div', 'ov');
+
+  // Hero：问候 + 秒级时钟 + 日期 / 农历 / 星期
+  const hero = el('div', 'ov-hero');
+  hero.innerHTML =
+    `<div class="ov-greet" id="ovGreet"></div>` +
+    `<div class="ov-clock" id="ovClock">--:--:--</div>` +
+    `<div class="ov-date"><span id="ovSolar"></span><span class="ov-lunar" id="ovLunar"></span></div>`;
+  wrap.appendChild(hero);
+
+  // 天气（占满整行）
+  const wcard = el('div', 'ov-card ov-weather');
+  wcard.id = 'ovWeather';
+  wrap.appendChild(wcard);
+
+  // 卡片网格
+  const grid = el('div', 'ov-grid');
+
+  // 今日安排
+  const tcard = el('div', 'ov-card ov-today');
+  tcard.appendChild(el('div', 'ov-card-h', '📅 今日安排'));
+  const tbody = el('div', 'ov-card-b');
+  const todays = todayOccurrences();
+  if (!todays.length) {
+    tbody.appendChild(el('div', 'ov-empty', '今天没有安排，轻松一下 ☕'));
+  } else {
+    for (const o of todays) {
+      const row = el('div', 'ov-sch');
+      row.appendChild(el('span', 'ov-sch-t', o.schedule.allDay ? '全天' : o.schedule.start || ''));
+      row.appendChild(el('span', 'ov-sch-title', o.schedule.title || '(无标题)'));
+      if (o.schedule.location) row.appendChild(el('span', 'ov-sch-loc', o.schedule.location));
+      row.onclick = () => jumpToSchedule(o.schedule.id, o.date);
+      tbody.appendChild(row);
+    }
+  }
+  tcard.appendChild(tbody);
+  grid.appendChild(tcard);
+
+  // 资料库概览
+  const scard = el('div', 'ov-card ov-stats');
+  scard.appendChild(el('div', 'ov-card-h', '📚 资料库概览'));
+  const sbody = el('div', 'ov-card-b ov-kv');
+  const today0 = todayStr();
+  const addedToday = state.entries.filter((e) => (e.createdAt || '').slice(0, 10) === today0).length;
+  [
+    ['资料总数', `${st.total} 条`],
+    ['今日新增', `${addedToday} 条`],
+    ['附件', `${st.attachments} 个`],
+    ['占用空间', humanSize(st.bytes)],
+    ['日程', `${st.schedules.total} 条`],
+  ].forEach(([k, v]) => {
+    const r = el('div', 'ov-kv-row');
+    r.appendChild(el('span', 'ov-kv-k', k));
+    r.appendChild(el('span', 'ov-kv-v', v));
+    sbody.appendChild(r);
+  });
+  scard.appendChild(sbody);
+  grid.appendChild(scard);
+
+  // 最近更新
+  const rcard = el('div', 'ov-card ov-recent');
+  rcard.appendChild(el('div', 'ov-card-h', '🕑 最近更新'));
+  const rbody = el('div', 'ov-card-b');
+  const recent = state.entries
+    .filter((e) => !e.deleted)
+    .slice()
+    .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+    .slice(0, 6);
+  if (!recent.length) {
+    rbody.appendChild(el('div', 'ov-empty', '还没有资料'));
+  } else {
+    for (const e of recent) {
+      const row = el('div', 'ov-rec');
+      row.appendChild(el('span', 'ov-rec-dot'));
+      row.appendChild(el('span', 'ov-rec-title', e.title || '(无标题)'));
+      row.onclick = () => {
+        state.view = 'all';
+        state.selectedId = e.id;
+        state.editing = null;
+        renderAll();
+      };
+      rbody.appendChild(row);
+    }
+  }
+  rcard.appendChild(rbody);
+  grid.appendChild(rcard);
+
+  // 每日冷知识
+  const fcard = el('div', 'ov-card ov-trivia');
+  fcard.appendChild(el('div', 'ov-card-h', '💡 今日冷知识'));
+  const fbody = el('div', 'ov-card-b');
+  const fact = pickTrivia(new Date());
+  fbody.appendChild(el('div', 'ov-trivia-q', fact.q));
+  fbody.appendChild(el('div', 'ov-trivia-a', fact.a));
+  fcard.appendChild(fbody);
+  grid.appendChild(fcard);
+
+  wrap.appendChild(grid);
+
+  // 快捷操作
+  const actions = el('div', 'ov-actions');
+  const aNew = el('button', 'tb primary', '＋ 新建资料');
+  aNew.onclick = startNewFlow;
+  const aCal = el('button', 'tb', '📅 打开日历');
+  aCal.onclick = () => gotoCalendar({ date: todayStr() });
+  const aSet = el('button', 'tb', '⚙ 设置');
+  aSet.onclick = openSettings;
+  actions.append(aNew, aCal, aSet);
+  wrap.appendChild(actions);
+
+  scroll.appendChild(wrap);
+
+  // 秒级时钟（含日期 / 农历 / 星期），每秒刷新
+  const tick = () => {
+    const d = new Date();
+    const c = $('#ovClock');
+    if (c) c.textContent = `${ovPad(d.getHours())}:${ovPad(d.getMinutes())}:${ovPad(d.getSeconds())}`;
+    const g = $('#ovGreet');
+    if (g) g.textContent = ovGreeting(d.getHours());
+    const dl = ovDateLine(d);
+    const solar = $('#ovSolar');
+    const lunar = $('#ovLunar');
+    if (solar) solar.textContent = dl.solar;
+    if (lunar) lunar.textContent = dl.lunar;
+  };
+  tick();
+  state._ovTimer = setInterval(tick, 1000);
+
+  // 天气
+  loadWeather();
 }
 
 /* ---------------------------------------------------------------- 概览空态 */
@@ -3345,6 +3619,18 @@ async function openSettings() {
       </div>
     </div>
 
+    <div class="set-section">
+      <h4>天气</h4>
+      <div class="set-row">
+        <div class="set-info">
+          <div class="set-t">默认城市</div>
+          <div class="set-d">总览页会显示这个城市的实时天气与 5 日预报，数据来自 Open-Meteo（免费、无需账号）。</div>
+        </div>
+        <input type="text" id="setWeatherCity" class="set-input" placeholder="如：上海 / 北京 / 杭州" value="${esc(state.prefs.weatherCity || '')}" style="max-width:160px" />
+      </div>
+      <div class="set-note">留空则默认显示「上海」。修改后回到总览页会自动刷新。</div>
+    </div>
+
     <div class="set-section" id="fsSection">
       <h4>飞书日历同步</h4>
       <div class="set-note">
@@ -3468,8 +3754,19 @@ async function openSettings() {
   const tl = body.querySelector('#setToggleList');
   tl.onclick = () => {
     toggleList();
-    tl.textContent = state.prefs.listCollapsed ? '展开列表栏' : '收起列表栏';
+    tl.textContent = state.prefs.listCollapsed ? '展开列表栏' : '收起分类栏';
   };
+
+  // 天气默认城市
+  const wcity = body.querySelector('#setWeatherCity');
+  if (wcity) {
+    wcity.onchange = (e) => {
+      const v = e.target.value.trim();
+      setPrefs({ weatherCity: v });
+      if (state.view === 'overview') loadWeather();
+      toast(v ? '天气城市已设为「' + v + '」' : '已恢复默认城市（上海）', 'ok');
+    };
+  }
 
   // 飞书日历同步
   const fsState = body.querySelector('#fsLoginState');

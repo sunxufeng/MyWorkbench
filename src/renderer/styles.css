@@ -2875,3 +2875,295 @@ pre.preview-md {
   display: none !important;
 }
 
+/* ==========================================================================
+   总览仪表盘（默认落地页）
+   ========================================================================== */
+
+/* 总览占满整块窗口，隐藏左栏与列表栏 */
+.app.ov-mode {
+  grid-template-columns: 0 0 minmax(0, 1fr);
+}
+.app.ov-mode .side-pane,
+.app.ov-mode .list-pane {
+  display: none;
+}
+.app.ov-mode .detail-pane {
+  background: var(--bg);
+}
+
+.ov {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 40px 40px 64px;
+}
+
+/* Hero：问候 + 秒级时钟 + 日期 / 农历 / 星期 */
+.ov-hero {
+  text-align: center;
+  padding: 14px 0 26px;
+}
+.ov-greet {
+  font-size: 14px;
+  color: var(--ink-3);
+  letter-spacing: 0.08em;
+}
+.ov-clock {
+  font-family: var(--mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 62px;
+  font-weight: 700;
+  line-height: 1.12;
+  color: var(--ink);
+  margin: 8px 0 4px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.ov-date {
+  font-size: 15px;
+  color: var(--ink-2);
+}
+.ov-lunar {
+  color: var(--gold);
+  margin-left: 10px;
+}
+
+/* 通用卡片 */
+.ov-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  padding: 16px 18px;
+}
+.ov-card-h {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin-bottom: 12px;
+}
+
+/* 天气卡 */
+.ov-weather {
+  margin-bottom: 18px;
+}
+.ov-w-now {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.ov-w-icon {
+  font-size: 46px;
+  line-height: 1;
+}
+.ov-w-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ov-w-temp {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1;
+}
+.ov-w-desc {
+  font-size: 13px;
+  color: var(--ink-3);
+  margin-top: 4px;
+}
+.ov-w-meta {
+  text-align: right;
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.8;
+  white-space: nowrap;
+}
+.ov-w-fc {
+  display: flex;
+  gap: 4px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.ov-w-day {
+  flex: 1 1 0;
+  text-align: center;
+}
+.ov-w-dl {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.ov-w-di {
+  font-size: 22px;
+  margin: 5px 0;
+}
+.ov-w-dt {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.ov-w-dt b {
+  color: var(--moss-deep);
+  font-weight: 600;
+}
+.ov-stale {
+  font-size: 11px;
+  color: var(--gold);
+  background: var(--gold-soft, #f5e9d3);
+  padding: 1px 7px;
+  border-radius: 20px;
+  margin-left: 6px;
+}
+.ov-w-err,
+.ov-w-load {
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+/* 卡片网格 */
+.ov-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.ov-today {
+  grid-column: 1 / -1;
+}
+.ov-trivia {
+  grid-column: 1 / -1;
+}
+
+/* 今日安排 */
+.ov-sch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.ov-sch:hover {
+  background: var(--panel-3);
+}
+.ov-sch-t {
+  flex: 0 0 auto;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 12.5px;
+  color: var(--moss-deep);
+  width: 56px;
+  font-variant-numeric: tabular-nums;
+}
+.ov-sch-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov-sch-loc {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--ink-4);
+  max-width: 38%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 资料库概览（键值） */
+.ov-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ov-kv-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 2px;
+  border-bottom: 1px dashed var(--line-soft);
+  font-size: 13.5px;
+}
+.ov-kv-row:last-child {
+  border-bottom: none;
+}
+.ov-kv-k {
+  color: var(--ink-3);
+}
+.ov-kv-v {
+  color: var(--ink);
+  font-weight: 600;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+}
+
+/* 最近更新 */
+.ov-rec {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  transition: background 0.12s ease;
+}
+.ov-rec:hover {
+  background: var(--panel-3);
+}
+.ov-rec-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--moss);
+  flex: 0 0 auto;
+}
+.ov-rec-title {
+  font-size: 13.5px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 每日冷知识 */
+.ov-trivia-q {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+.ov-trivia-a {
+  font-size: 13.5px;
+  color: var(--ink-2);
+  line-height: 1.85;
+}
+
+.ov-empty {
+  font-size: 13px;
+  color: var(--ink-4);
+  padding: 10px 4px;
+}
+
+/* 快捷操作 */
+.ov-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* 窄窗口降级为单列 */
+@media (max-width: 760px) {
+  .ov-grid {
+    grid-template-columns: 1fr;
+  }
+  .ov-today,
+  .ov-trivia {
+    grid-column: auto;
+  }
+  .ov-clock {
+    font-size: 48px;
+  }
+}
+

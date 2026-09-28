@@ -76,6 +76,11 @@ contextBridge.exposeInMainWorld('api', {
   // 打开外部链接
   openExternal: (url) => invoke('shell:open-external', url),
 
+  // 天气（主进程走 Open-Meteo，带缓存与离线降级）
+  weather: {
+    get: (city) => invoke('weather:get', city),
+  },
+
   // 拖拽进来的 File 对象 → 真实磁盘路径（Electron 32+ 不再有 File.path）
   pathForFile: (file) => {
     try {

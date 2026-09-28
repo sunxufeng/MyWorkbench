@@ -27,6 +27,7 @@ const { ArchiveStore, uid } = require('./store');
 const { LibraryService, defaultLibraryPath } = require('./library');
 const { FeishuClient } = require('./feishu');
 const { pullFromFeishu, pushToFeishu } = require('./sync');
+const weather = require('./weather');
 const {
   occurrencesOn,
   occurrencesInRange,
@@ -313,6 +314,12 @@ function registerIpc() {
   // ---- 界面偏好（主题、各栏收起状态…）----
   handle('prefs:get', async () => ({ prefs: lib.getPrefs() }));
   handle('prefs:set', async (patch) => ({ prefs: lib.setPrefs(patch) }));
+
+  // ---- 天气（Open-Meteo，免密钥）----
+  handle('weather:get', async (city) => {
+    const c = (city && String(city).trim()) || lib.getPrefs().weatherCity || '上海';
+    return await weather.getWeather(c);
+  });
 
   // ---- 资料 CRUD ----
   handle('entry:create', async (payload) => {
