@@ -11,6 +11,7 @@ const JSZip = require('jszip');
 
 const { ARCHIVE_FILE, ATTACH_DIR, BACKUP_DIR } = require('./store');
 const { fmtTime, fmtSlashDate, repeatDesc, buildIcs, todayStr, addDays } = require('../renderer/schedule');
+const Weread = require('./weread');
 
 const TYPE_LABEL = { text: '文字', link: '链接', image: '图片', file: '文件' };
 
@@ -226,6 +227,24 @@ class LibraryService {
     cfg.prefs = { ...LibraryService.DEFAULT_PREFS, ...(cfg.prefs || {}), ...(patch || {}) };
     this.writeConfig(cfg);
     return cfg.prefs;
+  }
+
+  /** 微信读书凭据状态（不返回明文，仅供 UI 判断是否已配置） */
+  getWereadStatus() {
+    return Weread.credsStatus(this.readConfig());
+  }
+
+  /** 写入微信读书凭据（API Key / 网页 Cookie），加密后存 config.json */
+  setWereadCreds({ apiKey, cookie } = {}) {
+    const cfg = this.readConfig();
+    Weread.saveCreds(cfg, apiKey, cookie);
+    this.writeConfig(cfg);
+    return this.getWereadStatus();
+  }
+
+  /** 读取解密后的微信读书凭据（仅主进程 weread 通道使用） */
+  getWereadCreds() {
+    return Weread.readCreds(this.readConfig());
   }
 
   /** 飞书日历同步配置。appId/appSecret 明文存于本机 config.json（本地个人工具，未上云）；

@@ -28,6 +28,7 @@ const { LibraryService, defaultLibraryPath } = require('./library');
 const { FeishuClient } = require('./feishu');
 const { pullFromFeishu, pushToFeishu } = require('./sync');
 const weather = require('./weather');
+const weread = require('./weread');
 const {
   occurrencesOn,
   occurrencesInRange,
@@ -319,6 +320,87 @@ function registerIpc() {
   handle('weather:get', async (city) => {
     const c = (city && String(city).trim()) || lib.getPrefs().weatherCity || '上海';
     return await weather.getWeather(c);
+  });
+
+  // ---- 微信读书（weread）只读网关 + 内嵌阅读器 ----
+  handle('weread:status', async () => {
+    return lib.getWereadStatus(); // { hasApiKey, hasCookie }
+  });
+
+  handle('weread:config', async (patch) => {
+    // patch: { apiKey?, cookie? } —— 空串表示清除该项，缺省表示保留原值
+    const cur = lib.getWereadCreds();
+    const apiKey = patch && 'apiKey' in patch ? patch.apiKey : cur.apiKey;
+    const cookie = patch && 'cookie' in patch ? patch.cookie : cur.cookie;
+    return lib.setWereadCreds({ apiKey: apiKey || '', cookie: cookie || '' });
+  });
+
+  handle('weread:call', async (apiName, params) => {
+    const { apiKey } = lib.getWereadCreds();
+    if (!apiKey) return { errcode: -1, errmsg: '未配置微信读书 API Key（设置 → 微信读书）' };
+    return await weread.gateway(apiKey, apiName, params || {});
+  });
+
+  handle('weread:chapter', async (bookId, chapterUid) => {
+    const { cookie } = lib.getWereadCreds();
+    if (!cookie) return { err: '未配置微信读书网页 Cookie（设置 → 微信读书）' };
+    return await weread.readChapter(cookie, bookId, chapterUid);
+  });
+
+  // ---- 文件编辑器 ----
+  handle('editor:open-folder', async () => {
+    if (!win) return { canceled: true };
+    const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
+    return { canceled: r.canceled, path: (r.filePaths && r.filePaths[0]) || '' };
+  });
+
+  handle('editor:list', async (_e, dir) => {
+    async function walk(p) {
+      let entries = [];
+      try {
+        entries = await fsp.readdir(p, { withFileTypes: true });
+      } catch (e) {
+        return [];
+      }
+      const out = [];
+      for (const ent of entries) {
+        if (ent.name.startsWith('.') || ent.name === 'node_modules' || ent.name === 'dist') continue;
+        const full = path.join(p, ent.name);
+        if (ent.isDirectory()) {
+          out.push({ name: ent.name, path: full, type: 'dir', children: await walk(full) });
+        } else if (ent.isFile()) {
+          out.push({ name: ent.name, path: full, type: 'file', ext: path.extname(ent.name).toLowerCase() });
+        }
+      }
+      return out.sort((a, b) => {
+        if (a.type === b.type) return a.name.localeCompare(b.name, 'zh-CN');
+        return a.type === 'dir' ? -1 : 1;
+      });
+    }
+    const children = await walk(dir);
+    return { name: path.basename(dir), path: dir, type: 'dir', children };
+  });
+
+  handle('editor:read', async (_e, filePath, encoding = 'utf8') => {
+    try {
+      if (encoding === 'base64') {
+        const buf = await fsp.readFile(filePath);
+        return { content: buf.toString('base64') };
+      }
+      const content = await fsp.readFile(filePath, encoding);
+      return { content };
+    } catch (e) {
+      return { error: e.message || '读取失败' };
+    }
+  });
+
+  handle('editor:write', async (_e, filePath, content) => {
+    try {
+      await fsp.writeFile(filePath, content, 'utf8');
+      return { ok: true };
+    } catch (e) {
+      return { error: e.message || '写入失败' };
+    }
   });
 
   // ---- 资料 CRUD ----

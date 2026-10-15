@@ -81,6 +81,22 @@ contextBridge.exposeInMainWorld('api', {
     get: (city) => invoke('weather:get', city),
   },
 
+  // 微信读书（weread）
+  weread: {
+    status: () => invoke('weread:status'),
+    config: (patch) => invoke('weread:config', patch),
+    call: (apiName, params) => invoke('weread:call', apiName, params),
+    chapter: (bookId, chapterUid) => invoke('weread:chapter', bookId, chapterUid),
+  },
+
+  // 文件编辑器（读取 / 编辑 / 预览本地文件夹与 HTML）
+  editor: {
+    openFolder: () => invoke('editor:open-folder'),
+    list: (dir) => invoke('editor:list', dir),
+    read: (filePath, encoding) => invoke('editor:read', filePath, encoding),
+    write: (filePath, content) => invoke('editor:write', filePath, content),
+  },
+
   // 拖拽进来的 File 对象 → 真实磁盘路径（Electron 32+ 不再有 File.path）
   pathForFile: (file) => {
     try {

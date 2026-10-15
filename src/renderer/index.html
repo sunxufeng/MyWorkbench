@@ -5,7 +5,7 @@
     <meta name="theme-color" content="#f6f2ea" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self' file: archive: data: blob: 'unsafe-inline'; img-src 'self' file: archive: data: blob:; media-src 'self' file: archive: data: blob:;"
+      content="default-src 'self' file: archive: data: blob: 'unsafe-inline'; img-src 'self' file: archive: data: blob: https:; media-src 'self' file: archive: data: blob: https:;"
     />
     <title>My Workbench</title>
     <link rel="stylesheet" href="styles.css" />
@@ -132,6 +132,22 @@
     <script src="schedule.js"></script>
     <script src="markdown.js"></script>
     <script src="lunar.js"></script>
+    <link rel="stylesheet" href="vendor/codemirror/codemirror.min.css" />
+    <script src="vendor/codemirror/codemirror.min.js"></script>
+    <script src="vendor/codemirror/xml.min.js"></script>
+    <script src="vendor/codemirror/htmlmixed.min.js"></script>
+    <script src="vendor/codemirror/css.min.js"></script>
+    <script src="vendor/codemirror/javascript.min.js"></script>
+    <script src="vendor/codemirror/closetag.min.js"></script>
+    <script src="vendor/codemirror/matchtags.min.js"></script>
+    <script src="vendor/codemirror/closebrackets.min.js"></script>
+    <script src="vendor/codemirror/foldcode.min.js"></script>
+    <script src="vendor/codemirror/foldgutter.min.js"></script>
+    <script src="vendor/codemirror/xml-fold.min.js"></script>
+    <script src="vendor/codemirror/active-line.min.js"></script>
+    <script src="vendor/codemirror/searchcursor.min.js"></script>
     <script src="app.js"></script>
+    <script src="weread-ui.js"></script>
+    <script src="editor-ui.js"></script>
   </body>
 </html>

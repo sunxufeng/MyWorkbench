@@ -72,6 +72,43 @@ const state = {
   expandedAgendaDays: new Set(), // 议程视图里展开「明天以后」的分组
   reminders: [], // 提醒条上的日程
   pendingSplitDate: '', // 「只改这一次」时记住原来那次是哪天
+  // ---- 微信读书（weread）运行时状态 ----
+  wr: {
+    ready: false,        // 是否已加载过配置
+    status: null,        // { hasApiKey, hasCookie }
+    books: [],           // 书架
+    query: '',           // 搜索关键词
+    results: [],         // 搜索结果
+    recommend: [],       // 推荐
+    listTab: 'shelf',     // 中栏：shelf | recommend
+    selectedBook: null,  // 当前选中书籍 { bookId, title, author, cover, intro, deepLink, progress }
+    chapters: [],        // 章节目录
+    chapterUid: null,    // 阅读器当前章节
+    readerHtml: '',      // 解密后的章节正文
+    readerLoading: false,
+    readerErr: '',
+    tab: 'detail',       // detail | chapters | notes | reviews | mine
+    top: 'shelf',        // 中栏顶部标签：shelf | search | stats | discover
+    bookmarks: null,     // 划线
+    reviews: null,       // 公开书评
+    mine: null,          // 我的想法
+    stats: null,         // 阅读统计（尽力而为）
+    loading: false,
+    loadingMsg: '',
+  },
+  // ---- 文件编辑器运行时状态 ----
+  ed: {
+    root: '',            // 当前打开的文件夹路径
+    tree: null,          // 文件树 { name, path, type, children }
+    tabs: {},            // path -> { content, original, type, ext, dirty }
+    activePath: '',      // 当前活动文件路径
+    panePaths: ['', ''], // 分屏时两个窗格各自打开的文件
+    split: false,        // 是否分屏
+    preview: true,       // 是否显示实时预览
+    searchQuery: '',
+    searchResults: [],
+    theme: { preset: 'dark', bg: '#174A45', sidebar: '#0F2E2B', accent: '#4ECDC4', codeBg: '#0b2623', codeTxt: '#eafffb', bgImage: '', bgOpacity: 1 },
+  },
 };
 
 /* ---------------------------------------------------------------- 小工具 */
@@ -398,6 +435,8 @@ function renderSidebar() {
 
   const todayN = todayOccurrences().length;
   mk('overview', '◧', '总览', '', '');
+  mk('weread', '📚', '微信读书', '', '');
+  mk('editor', '💻', '文件编辑器', '', '');
   mk('calendar', '▦', '日历', todayN ? `${todayN} 今日` : '', '');
   mk('all', '▤', '全部资料', st.total);
   mk('trash', '🗑', '回收站', st.trashed + (st.schedules ? st.schedules.trashed : 0));
@@ -573,15 +612,19 @@ function renderListControls() {
 function setPaneMode() {
   const cal = state.view === 'calendar';
   const ov = state.view === 'overview';
+  const wr = state.view === 'weread';
+  const ed = state.view === 'editor';
   const app = $('#app');
   if (app) {
     app.classList.toggle('cal-mode', cal);
     app.classList.toggle('ov-mode', ov);
+    app.classList.toggle('wr-mode', wr);
+    app.classList.toggle('ed-mode', ed);
   }
   const head = $('#calHead');
   if (head) head.classList.toggle('hidden', !cal);
   const lh = $('#listHead');
-  if (lh) lh.classList.toggle('hidden', cal || ov);
+  if (lh) lh.classList.toggle('hidden', cal || ov || wr || ed);
   const sb = $('#listScroll');
   if (sb) sb.classList.toggle('cal-scroll', cal);
   const si = $('#searchInput');
@@ -597,6 +640,8 @@ function renderList() {
   if (state.view === 'overview') return; // 总览占用整块详情区，列表栏隐藏
   setPaneMode();
   if (state.view === 'calendar') return renderCalendar();
+  if (state.view === 'weread') return renderWereadList();
+  if (state.view === 'editor') return renderEditorList();
 
   const list = currentList();
   state.lastVisible = list;
@@ -2111,6 +2156,8 @@ function renderDetail() {
     return renderOverviewPage();
   }
   if (state.view === 'calendar') return renderCalendarDetail();
+  if (state.view === 'weread') return renderWereadDetail();
+  if (state.view === 'editor') return renderEditorDetail();
   if (state.editing) return renderEditor();
   const e = state.entries.find((x) => x.id === state.selectedId);
 
@@ -3631,6 +3678,29 @@ async function openSettings() {
       <div class="set-note">留空则默认显示「上海」。修改后回到总览页会自动刷新。</div>
     </div>
 
+    <div class="set-section" id="wrSection">
+      <h4>微信读书</h4>
+      <div class="set-note">
+        在 My Workbench 里看微信读书：书架、搜索、书籍详情、阅读进度、笔记、想法与书评，还能<strong>内嵌阅读器</strong>本地读正文。
+        <br>· <strong>API Key</strong>（wrk- 开头）用于只读网关，可看书架 / 进度 / 笔记等；
+        · <strong>网页 Cookie</strong> 用于内嵌阅读器拉取正文（取自浏览器登录后的 weread.qq.com，仅存本机、加密保存）。
+        <br>⚠️ <strong>两者不是一回事</strong>：Cookie 是一长串、含 <code>wr_skey=</code> 等字段的浏览器会话串，<strong>不是</strong> API Key（API Key 只有约 30 字符，填进 Cookie 框会导致阅读失败）。
+        <br>· 微信读书开放能力为<strong>只读</strong>：本应用<strong>无法把阅读记录写回微信读书</strong>，也不含会员抽奖 / 每周阅读奖励 / 翻一翻（均为 App 内活动）。
+      </div>
+      <div class="set-row wr-row">
+        <div class="set-info"><div class="set-t">API Key</div><div class="set-d" id="wrKeyState">未配置</div></div>
+        <input type="password" id="wrApiKey" class="wr-input" placeholder="wrk-xxxxxxxx" autocomplete="off" />
+      </div>
+      <div class="set-row wr-row">
+        <div class="set-info"><div class="set-t">网页 Cookie</div><div class="set-d" id="wrCookieState">未配置（内嵌阅读器需要）</div></div>
+        <input type="password" id="wrCookie" class="wr-input" placeholder="粘贴 weread.qq.com 登录后的完整 Cookie（含 wr_skey 等，非 API Key）" autocomplete="off" />
+      </div>
+      <div class="bk-actions">
+        <button class="tb" id="wrSave">保存配置</button>
+        <button class="tb" id="wrClear">清除凭据</button>
+      </div>
+    </div>
+
     <div class="set-section" id="fsSection">
       <h4>飞书日历同步</h4>
       <div class="set-note">
@@ -3847,6 +3917,57 @@ async function openSettings() {
   if (fsPush) fsPush.onclick = () => doSync('push');
 
   await refreshFs();
+
+  // 微信读书配置
+  const wrKeyState = body.querySelector('#wrKeyState');
+  const wrCookieState = body.querySelector('#wrCookieState');
+  const wrApiKey = body.querySelector('#wrApiKey');
+  const wrCookie = body.querySelector('#wrCookie');
+  const wrSave = body.querySelector('#wrSave');
+  const wrClear = body.querySelector('#wrClear');
+
+  const refreshWr = async () => {
+    const r = await act(API.weread.status());
+    if (!r) return;
+    state.wr.status = r;
+    if (wrKeyState) wrKeyState.textContent = r && r.hasApiKey ? '已配置 ✓' : '未配置';
+    if (wrCookieState) {
+      if (!r || !r.hasCookie) wrCookieState.textContent = '未配置（内嵌阅读器需要）';
+      else if (!r.cookieOk) wrCookieState.textContent = `已填但似乎不完整（${r.cookieLen} 字符，需含 wr_skey 等）`;
+      else wrCookieState.textContent = '已配置 ✓（内嵌阅读器可用）';
+    }
+  };
+  if (wrSave)
+    wrSave.onclick = async () => {
+      const patch = {};
+      // 仅发送非空字段，避免改一项时把另一项清空
+      if (wrApiKey && wrApiKey.value) patch.apiKey = wrApiKey.value;
+      if (wrCookie && wrCookie.value) patch.cookie = wrCookie.value;
+      if (!Object.keys(patch).length) { toast('没有可保存的内容', 'err'); return; }
+      const r = await act(API.weread.config(patch));
+      if (r) {
+        if (wrApiKey) wrApiKey.value = '';
+        if (wrCookie) wrCookie.value = '';
+        await refreshWr();
+        toast('微信读书配置已保存', 'ok');
+      }
+    };
+  if (wrClear)
+    wrClear.onclick = async () => {
+      const ok = await confirmDialog({
+        title: '清除微信读书凭据？',
+        message: '本地保存的 API Key 与网页 Cookie 会被删除；已拉取的书架数据仍在界面缓存里，重进会重新拉取。',
+        okLabel: '清除',
+        danger: true,
+      });
+      if (!ok) return;
+      const r = await act(API.weread.config({ apiKey: '', cookie: '' }));
+      if (r) {
+        await refreshWr();
+        toast('已清除微信读书凭据', 'ok');
+      }
+    };
+  await refreshWr();
 
   refreshBackupList();
 }
