@@ -51,9 +51,10 @@ module.exports = async function ({ win, app, shot, errors }) {
       hasFrame: !!f,
       frameReady: !!(doc && doc.body),
       bodyHas: doc ? doc.body.innerHTML.includes('HelloWorld') : false,
-      hasAddList: !!document.getElementById('wbAddList'),
-      hasLayers: !!document.getElementById('wbLayerTree'),
+      hasLeft: !!document.getElementById('wbLeftBody'),
+      hasNavigator: !!document.getElementById('wbLayerTree'),
       hasInspect: !!document.getElementById('wbInspectBody'),
+      hasBreadcrumb: !!document.querySelector('.wb-breadcrumb'),
     };
   })()`);
   log('进设计模式：' + JSON.stringify(toggled));
@@ -61,11 +62,22 @@ module.exports = async function ({ win, app, shot, errors }) {
   assert(toggled.hasFrame, '画布 iframe 存在');
   assert(toggled.frameReady, 'iframe 已加载且 body 就绪');
   assert(toggled.bodyHas, '页面内容正确装载进画布');
-  assert(toggled.hasAddList, '出现「添加元素」面板');
-  assert(toggled.hasLayers, '出现「图层」面板');
+  assert(toggled.hasLeft, '出现左侧 Elements/Navigator 面板');
+  assert(toggled.hasNavigator, '出现 Navigator 图层树');
   assert(toggled.hasInspect, '出现「检查器」面板');
+  assert(toggled.hasBreadcrumb, '出现顶部 breadcrumb');
 
-  // 添加元素（heading + section）
+  // 切换到 Elements 面板
+  const elems = await run(`(async () => {
+    wbToggleLeft('elements');
+    await new Promise(r => setTimeout(r, 50));
+    return { hasAddList: !!document.getElementById('wbAddList') };
+  })()`);
+  log('Elements 面板：' + JSON.stringify(elems));
+  assert(elems.hasAddList, 'Elements 面板出现「添加元素」列表');
+
+  // 切回 Navigator 后再添加元素（heading + section）
+  await run(`wbToggleLeft('navigator')`);
   const added = await run(`(async () => {
     wbAddElement('heading');
     wbAddElement('section');

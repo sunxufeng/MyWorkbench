@@ -1,8 +1,8 @@
 'use strict';
 /* ==========================================================================
    My Workbench —— 设计模式（参考 Webflow 的可视化建站器）
-   四栏布局：元素面板 / 图层树 / 画布（iframe）/ 样式·设置检查器。
-   在画布里点选元素 → 右侧可视化改 CSS（内联或断点覆盖）→ 实时回写源码。
+   左侧面板（Elements / Navigator 切换）/ 画布（iframe）/ 检查器（Style/Settings）
+   在画布里点选元素 → 右侧可视化改 CSS → 实时回写源码。
    复用 editor-ui.js 暴露的：edActivePath / edActiveContent / edRebuild /
    edExtractBody / edSaveActive / mkTb / renderDetailBar / renderEditorList /
    edUpdateStatus / el / esc / toast / act / API / $
@@ -11,15 +11,26 @@
 const WB_BP = { desktop: null, tablet: 991, mobile: 767 };
 const WB_DEVICES = [
   { bp: 'desktop', label: '桌面', icon: '🖥', width: '100%' },
-  { bp: 'tablet', label: '平板', icon: '📱', width: '768px' },
+  { bp: 'tablet', label: '平板', icon: '💻', width: '768px' },
   { bp: 'mobile', label: '手机', icon: '📱', width: '375px' },
 ];
 const WB_TEXT_TAGS = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'A', 'BUTTON', 'LI', 'LABEL', 'SPAN'];
 const WB_CONTAINER_TAGS = ['BODY', 'DIV', 'SECTION', 'HEADER', 'FOOTER', 'MAIN', 'ARTICLE', 'ASIDE', 'NAV', 'UL', 'OL', 'FORM', 'TABLE'];
+const WB_TAG_ICONS = {
+  body: '◎', section: '▭', header: '▭', footer: '▭', main: '▭', article: '▭', aside: '▭', nav: '▭',
+  div: '▢', container: '▢',
+  h1: 'H', h2: 'H', h3: 'H', h4: 'H', h5: 'H', h6: 'H',
+  p: '¶', span: 'T', a: '🔗', button: '⬚', img: '🖼',
+  ul: '☰', ol: '☰', li: '•', form: '✓', input: '⊞', label: '🏷',
+  table: '▦', tr: '▦', td: '▦',
+};
 
 function wbState() {
   if (!state.ed.builderState) {
-    state.ed.builderState = { selId: null, bp: 'desktop', inspectTab: 'style', bpStyles: {}, handleCounter: 0, tabId: null };
+    state.ed.builderState = {
+      selId: null, bp: 'desktop', inspectTab: 'style', bpStyles: {},
+      handleCounter: 0, tabId: null, leftTab: 'navigator', collapsed: new Set(),
+    };
   }
   return state.ed.builderState;
 }
@@ -49,12 +60,18 @@ function renderBuilder() {
   const path = edActivePath();
   const isHtml = !!path && /\.html?$/i.test(path);
 
-  // 工具条
+  /* 顶栏：Elements 切换 / breadcrumb / 断点 / 保存 / 切代码 */
   const bar = [];
+  const elBtn = mkTb('+ Elements', bs.leftTab === 'elements' ? 'on' : '', () => wbToggleLeft('elements'), '打开元素面板');
+  const navBtn = mkTb('⧉ Navigator', bs.leftTab === 'navigator' ? 'on' : '', () => wbToggleLeft('navigator'), '打开图层树');
+  bar.push(elBtn, navBtn);
+  bar.push(el('span', 'spacer'));
+  bar.push(el('div', 'wb-breadcrumb', '<span>Body</span>'));
+  bar.push(el('span', 'spacer'));
   const bpGroup = el('div', 'wb-bp-group');
   WB_DEVICES.forEach((d) => {
     const b = el('button', 'tb' + (bs.bp === d.bp ? ' on' : ''), `${d.icon} ${d.label}`);
-    b.title = `切换到${d.label}视口（${d.width}）`;
+    b.title = `${d.label}（${d.width}）`;
     b.onclick = () => wbSetBp(d.bp);
     bpGroup.appendChild(b);
   });
@@ -66,25 +83,52 @@ function renderBuilder() {
   const detail = $('#detailScroll');
   detail.innerHTML = '';
   if (!isHtml) {
-    detail.appendChild(el('div', 'wb-empty', '打开一个 HTML 文件后，点顶栏「🎨 设计」即可进入可视化建站：拖/加点、点选、改样式。'));
+    detail.appendChild(el('div', 'wb-empty', '打开一个 HTML 文件后，点顶栏「🎨 设计」即可进入可视化建站。'));
     return;
   }
 
   const wrap = el('div', 'wb');
   wrap.innerHTML = `
-    <aside class="wb-add"><header>添加元素</header><div class="wb-add-list" id="wbAddList"></div></aside>
-    <aside class="wb-layers"><header>图层</header><div class="wb-layer-tree" id="wbLayerTree"></div></aside>
+    <aside class="wb-left" id="wbLeftPanel"><div class="wb-left-body" id="wbLeftBody"></div></aside>
     <main class="wb-canvas-wrap">
-      <div class="wb-canvas-bar"><span id="wbCanvasInfo"></span></div>
+      <div class="wb-canvas-bar" id="wbCanvasBar"></div>
       <div class="wb-canvas" id="wbCanvas"><iframe id="wbFrame"></iframe></div>
     </main>
-    <aside class="wb-inspect"><header>检查器</header><div class="wb-inspect-tabs" id="wbInspectTabs"></div><div class="wb-inspect-body" id="wbInspectBody"></div></aside>
+    <aside class="wb-inspect" id="wbInspect"><div class="wb-inspect-tabs" id="wbInspectTabs"></div><div class="wb-inspect-body" id="wbInspectBody"></div></aside>
   `;
   detail.appendChild(wrap);
 
-  wbRenderAddList();
+  wbRenderLeftPanel();
   wbRenderInspectTabs();
   wbLoadCanvas();
+}
+
+/* -------------------------------------------------------------- 左侧面板切换 */
+
+function wbToggleLeft(tab) {
+  const bs = wbState();
+  bs.leftTab = tab;
+  wbRenderLeftPanel();
+}
+
+function wbRenderLeftPanel() {
+  const bs = wbState();
+  const body = document.getElementById('wbLeftBody');
+  if (!body) return;
+  body.innerHTML = '';
+  if (bs.leftTab === 'elements') {
+    body.innerHTML = `
+      <header><span>Elements</span><button class="wb-close" data-close>✕</button></header>
+      <div class="wb-add-list" id="wbAddList"></div>`;
+    body.querySelector('[data-close]').onclick = () => wbToggleLeft('navigator');
+    wbRenderAddList();
+  } else {
+    body.innerHTML = `
+      <header><span>Navigator</span><button class="wb-close" data-close>✕</button></header>
+      <div class="wb-layer-tree" id="wbLayerTree"></div>`;
+    body.querySelector('[data-close]').onclick = () => wbToggleLeft('elements');
+    wbBuildLayers();
+  }
 }
 
 /* -------------------------------------------------------------- 画布加载 */
@@ -98,7 +142,6 @@ function wbLoadCanvas() {
   bs.handleCounter = 0;
   let src = wbNormalizeDoc(tab.content);
 
-  // 提取已有的断点覆盖样式块（data-wf-bp），之后从源里摘掉，避免重复注入
   const m = src.match(/<style\s+data-wf-bp[^>]*>([\s\S]*?)<\/style>/i);
   if (m) { bs.bpStyles = wbParseBp(m[1]); src = src.replace(m[0], ''); }
   else bs.bpStyles = {};
@@ -116,21 +159,20 @@ function wbOnFrameReady() {
   const doc = frame.contentDocument;
   if (!doc) return;
 
-  // 选中/悬停高亮等辅助样式
   const hs = doc.createElement('style');
   hs.setAttribute('data-wf-helper', '');
   hs.textContent = `
-    [data-wf-id]{ outline:1px dashed rgba(78,205,196,.45); outline-offset:-1px; }
-    .wf-hover{ outline:1.5px solid #4ECDC4 !important; outline-offset:-1px; }
+    [data-wf-id]{ outline:1px dashed rgba(78,205,196,.35); outline-offset:-1px; }
+    .wf-hover{ outline:1.5px solid rgba(78,205,196,.75) !important; outline-offset:-1px; }
     .wf-sel{ outline:2px solid #4ECDC4 !important; outline-offset:-2px; }
     [contenteditable="true"]{ outline:2px solid #FFD700 !important; }
     .wf-tag{ position:absolute; z-index:99999; transform:translateY(-100%);
-      background:#1A5C56; color:#fff; font:11px/1.4 'JetBrains Mono',monospace;
-      padding:2px 6px; border-radius:4px 4px 4px 0; pointer-events:none; white-space:nowrap; }
+      background:#4ECDC4; color:#0f2e2b; font:11px/1.4 'JetBrains Mono',monospace;
+      padding:2px 6px; border-radius:4px 4px 4px 0; pointer-events:none; white-space:nowrap;
+      box-shadow:0 2px 8px rgba(0,0,0,.25); }
   `;
   doc.head.appendChild(hs);
 
-  // 从已有 data-wf 派生句柄计数
   const bs = wbState();
   let maxH = 0;
   doc.querySelectorAll('[data-wf]').forEach((n) => {
@@ -206,11 +248,8 @@ function wbSetBp(bp) {
 }
 
 function wbUpdateCanvasInfo() {
-  const info = document.getElementById('wbCanvasInfo');
-  if (!info) return;
   const bs = wbState();
   const dev = WB_DEVICES.find((d) => d.bp === bs.bp);
-  info.textContent = `${dev.label} · ${dev.width}` + (bs.selId ? `  ·  已选 #${bs.selId}` : '');
   const canvas = document.getElementById('wbCanvas');
   if (canvas) canvas.style.setProperty('--wb-w', dev.width);
 }
@@ -229,19 +268,44 @@ function wbSelect(id) {
   } else {
     wbHideTag();
   }
-  const tree = document.getElementById('wbLayerTree');
-  if (tree) tree.querySelectorAll('.wb-layer').forEach((n) => n.classList.toggle('active', n.dataset.id === id));
+  wbBuildLayers();
+  wbRenderBreadcrumb(elc);
   wbRenderInspector();
+}
+
+function wbRenderBreadcrumb(elc) {
+  const bar = document.getElementById('wbCanvasBar');
+  if (!bar) return;
+  const bs = wbState();
+  const dev = WB_DEVICES.find((d) => d.bp === bs.bp);
+  let crumbs = [];
+  if (elc) {
+    let cur = elc;
+    while (cur && cur.tagName !== 'BODY') {
+      const name = cur.className ? '.' + String(cur.className).trim().split(/\s+/)[0] : (cur.id ? '#' + cur.id : '');
+      crumbs.unshift({ id: cur.getAttribute('data-wf-id'), tag: cur.tagName.toLowerCase(), name });
+      cur = cur.parentElement;
+    }
+  }
+  crumbs.unshift({ id: null, tag: 'body', name: '' });
+  const html = `<div class="wb-breadcrumb">` + crumbs.map((c) => {
+    const label = c.tag + esc(c.name);
+    return c.id ? `<button data-id="${c.id}">${label}</button>` : `<span>${label}</span>`;
+  }).join('<span class="wb-bc-sep">›</span>') + `</div><div class="wb-canvas-meta">${dev.label} · ${dev.width}${bs.selId ? ' · #' + bs.selId : ''}</div>`;
+  bar.innerHTML = html;
+  bar.querySelectorAll('button[data-id]').forEach((b) => {
+    b.onclick = () => wbSelect(b.dataset.id);
+  });
 }
 
 function wbShowTag(elm) {
   const doc = wbFrame().contentDocument;
   let tag = doc.querySelector('.wf-tag');
   if (!tag) { tag = doc.createElement('div'); tag.className = 'wf-tag'; doc.body.appendChild(tag); }
-  const r = elm.getBoundingClientRect();
-  tag.textContent = elm.tagName.toLowerCase() + (elm.id ? '#' + elm.id : '') + (elm.className ? '.' + String(elm.className).trim().split(/\s+/)[0] : '');
-  tag.style.top = Math.max(0, r.top) + 'px';
-  tag.style.left = Math.max(0, r.left) + 'px';
+  const cls = elm.className ? '.' + String(elm.className).trim().split(/\s+/)[0] : '';
+  tag.textContent = elm.tagName.toLowerCase() + esc(cls);
+  tag.style.top = Math.max(0, elm.getBoundingClientRect().top) + 'px';
+  tag.style.left = Math.max(0, elm.getBoundingClientRect().left) + 'px';
 }
 function wbHideTag() {
   const doc = wbFrame().contentDocument;
@@ -249,7 +313,7 @@ function wbHideTag() {
   if (t) t.remove();
 }
 
-/* -------------------------------------------------------------- 图层树 */
+/* -------------------------------------------------------------- Navigator 树 */
 
 function wbBuildLayers() {
   const tree = document.getElementById('wbLayerTree');
@@ -259,21 +323,35 @@ function wbBuildLayers() {
   tree.innerHTML = '';
   const bs = wbState();
   const walk = (node, depth) => {
-    Array.from(node.children).forEach((ch) => {
-      if (ch.tagName === 'SCRIPT' || ch.tagName === 'STYLE') return;
-      const id = ch.getAttribute('data-wf-id');
-      const row = el('div', 'wb-layer' + (id === bs.selId ? ' active' : ''));
-      row.dataset.id = id;
-      row.style.paddingLeft = 6 + depth * 14 + 'px';
-      const cls = ch.className ? '.' + String(ch.className).trim().split(/\s+/)[0] : '';
-      const name = cls || (ch.id ? '#' + ch.id : '');
-      row.innerHTML = `<span class="wb-layer-tag">${esc(ch.tagName.toLowerCase())}</span><span class="wb-layer-name">${esc(name)}</span>`;
-      row.onclick = () => wbSelect(id);
-      tree.appendChild(row);
-      walk(ch, depth + 1);
-    });
+    const children = Array.from(node.children).filter((ch) => ch.tagName !== 'SCRIPT' && ch.tagName !== 'STYLE');
+    const hasKids = children.length > 0;
+    const id = node.getAttribute('data-wf-id');
+    const tag = node.tagName.toLowerCase();
+    const icon = WB_TAG_ICONS[tag] || WB_TAG_ICONS[node.className && node.className.includes('container') ? 'container' : 'div'] || '▪';
+    const cls = node.className ? '.' + String(node.className).trim().split(/\s+/)[0] : '';
+    const name = cls || (node.id ? '#' + node.id : '');
+    const row = el('div', 'wb-layer' + (id === bs.selId ? ' active' : '') + (hasKids ? ' has-children' : ''));
+    row.dataset.id = id;
+    row.style.paddingLeft = 8 + depth * 14 + 'px';
+    row.innerHTML = `
+      <span class="wb-layer-arrow" style="visibility:${hasKids ? 'visible' : 'hidden'}">▾</span>
+      <span class="wb-layer-icon">${icon}</span>
+      <span class="wb-layer-tag">${esc(tag)}</span>
+      <span class="wb-layer-name">${esc(name)}</span>`;
+    row.onclick = (e) => {
+      if (e.target.classList.contains('wb-layer-arrow')) {
+        e.stopPropagation();
+        row.classList.toggle('collapsed');
+        return;
+      }
+      wbSelect(id);
+    };
+    tree.appendChild(row);
+    if (!bs.collapsed.has(id)) {
+      children.forEach((ch) => walk(ch, depth + 1));
+    }
   };
-  walk(doc.body, 0);
+  Array.from(doc.body.children).forEach((ch) => walk(ch, 0));
 }
 
 /* -------------------------------------------------------------- 添加元素 */
@@ -348,8 +426,8 @@ function wbRenderInspectTabs() {
   if (!tabs) return;
   const bs = wbState();
   tabs.innerHTML = `
-    <button class="wb-tab ${bs.inspectTab === 'style' ? 'on' : ''}" data-tab="style">样式</button>
-    <button class="wb-tab ${bs.inspectTab === 'settings' ? 'on' : ''}" data-tab="settings">设置</button>`;
+    <button class="wb-tab ${bs.inspectTab === 'style' ? 'on' : ''}" data-tab="style">Style</button>
+    <button class="wb-tab ${bs.inspectTab === 'settings' ? 'on' : ''}" data-tab="settings">Settings</button>`;
   tabs.querySelectorAll('.wb-tab').forEach((b) => {
     b.onclick = () => { bs.inspectTab = b.dataset.tab; wbRenderInspectTabs(); wbRenderInspector(); };
   });
@@ -361,13 +439,11 @@ function wbRenderInspector() {
   const bs = wbState();
   const elc = bs.selId ? wbEl(bs.selId) : null;
   if (!elc) {
-    body.innerHTML = '<div class="wb-inspect-empty">在画布中点选一个元素，这里会出现它的样式与设置。也可以从左侧「添加元素」开始。</div>';
+    body.innerHTML = '<div class="wb-inspect-empty">在画布中点选一个元素，这里会出现它的样式与设置。<br>也可以从左侧「Elements」添加新元素。</div>';
     return;
   }
-  if (bs.inspectTab === 'style') body.innerHTML = wbStylePanel(elc);
-  else body.innerHTML = wbSettingsPanel(elc);
-  if (bs.inspectTab === 'style') wbBindStylePanel(elc);
-  else wbBindSettingsPanel(elc);
+  if (bs.inspectTab === 'style') { body.innerHTML = wbStylePanel(elc); wbBindStylePanel(elc); }
+  else { body.innerHTML = wbSettingsPanel(elc); wbBindSettingsPanel(elc); }
 }
 
 /* -------------------------------------------------------------- 检查器：样式 */
@@ -482,32 +558,43 @@ function wbIn(type, prop, val, ph) {
 function wbStylePanel(elc) {
   const bs = wbState();
   const bp = bs.bp;
-  const g = (title, inner) => `<div class="wb-sec"><div class="wb-sec-h">${title}${bp !== 'desktop' ? ' <span class="wb-bp-badge">' + bp + '</span>' : ''}</div>${inner}</div>`;
-  const display = wbGetStyle(elc, 'display');
-  const isFlex = display === 'flex';
-  let layout = wbIn('text', 'display', display, 'block/flex/grid…');
-  if (isFlex) {
-    layout += wbSel([['row', '横向 row'], ['column', '纵向 column'], ['row-reverse', 'row-reverse'], ['column-reverse', 'column-reverse']], wbGetStyle(elc, 'flex-direction'), 'data-wf-prop="flex-direction" data-wf-kind="css"');
-    layout += wbSel([['flex-start', 'start'], ['center', 'center'], ['flex-end', 'end'], ['space-between', 'between'], ['space-around', 'around']], wbGetStyle(elc, 'justify-content'), 'data-wf-prop="justify-content" data-wf-kind="css"');
-    layout += wbSel([['stretch', 'stretch'], ['flex-start', 'start'], ['center', 'center'], ['flex-end', 'end']], wbGetStyle(elc, 'align-items'), 'data-wf-prop="align-items" data-wf-kind="css"');
-  }
-  layout += '<div class="wb-row2"><label>宽</label>' + wbIn('text', 'width', wbGetStyle(elc, 'width'), 'auto') + '</div>';
-  layout += '<div class="wb-row2"><label>高</label>' + wbIn('text', 'height', wbGetStyle(elc, 'height'), 'auto') + '</div>';
+  const badge = bp !== 'desktop' ? ` <span class="wb-bp-badge">${bp}</span>` : '';
+  const sec = (id, title, inner, open = true) => `<div class="wb-sec" data-sec="${id}"><button class="wb-sec-h" data-sec-h>${esc(title)}${badge}<span class="wb-sec-arrow">${open ? '▾' : '▸'}</span></button><div class="wb-sec-body" ${open ? '' : 'style="display:none"'}>${inner}</div></div>`;
 
-  const box = (p) => wbIn('text', p, wbGetStyle(elc, p), '0');
-  const spacing = `
-    <div class="wb-bm-grid">${box('margin-top')}${box('margin-right')}${box('margin-bottom')}${box('margin-left')}</div>
-    <div class="wb-bm-label">内边距 padding</div>
-    <div class="wb-bm-grid">${box('padding-top')}${box('padding-right')}${box('padding-bottom')}${box('padding-left')}</div>`;
+  const display = wbGetStyle(elc, 'display') || 'block';
+  const layout = `
+    <div class="wb-disp-group">
+      ${['block','flex','grid','none'].map((d) => `<button class="wb-disp ${display === d ? 'on' : ''}" data-disp="${d}">${{block:'▪ Block',flex:'▭ Flex',grid:'▦ Grid',none:'∅ None'}[d]}</button>`).join('')}
+    </div>
+    ${display === 'flex' ? wbFlexPanel(elc) : ''}
+    ${display === 'grid' ? wbGridPanel(elc) : ''}
+    <div class="wb-row2"><label>宽</label>${wbIn('text', 'width', wbGetStyle(elc, 'width'), 'auto')}</div>
+    <div class="wb-row2"><label>高</label>${wbIn('text', 'height', wbGetStyle(elc, 'height'), 'auto')}</div>`;
+
+  const spacing = wbBoxModel(elc);
+
+  const size = `
+    <div class="wb-row2"><label>Min W</label>${wbIn('text', 'min-width', wbGetStyle(elc, 'min-width'), '0')}</div>
+    <div class="wb-row2"><label>Max W</label>${wbIn('text', 'max-width', wbGetStyle(elc, 'max-width'), 'none')}</div>
+    <div class="wb-row2"><label>Min H</label>${wbIn('text', 'min-height', wbGetStyle(elc, 'min-height'), '0')}</div>
+    <div class="wb-row2"><label>Max H</label>${wbIn('text', 'max-height', wbGetStyle(elc, 'max-height'), 'none')}</div>`;
+
+  const position = wbSel([['', 'Static'], ['relative', 'Relative'], ['absolute', 'Absolute'], ['fixed', 'Fixed'], ['sticky', 'Sticky']], wbGetStyle(elc, 'position') || '', 'data-wf-prop="position" data-wf-kind="css') +
+    `<div class="wb-row2"><label>上</label>${wbIn('text', 'top', wbGetStyle(elc, 'top'), '0')}</div>
+     <div class="wb-row2"><label>右</label>${wbIn('text', 'right', wbGetStyle(elc, 'right'), '0')}</div>
+     <div class="wb-row2"><label>下</label>${wbIn('text', 'bottom', wbGetStyle(elc, 'bottom'), '0')}</div>
+     <div class="wb-row2"><label>左</label>${wbIn('text', 'left', wbGetStyle(elc, 'left'), '0')}</div>`;
 
   const typ = `
     ${wbSel([['', '默认'], ['system-ui, sans-serif', '无衬线'], ['"PingFang SC", sans-serif', '苹方'], ['Georgia, serif', '衬线'], ['monospace', '等宽']], wbGetStyle(elc, 'font-family'), 'data-wf-prop="font-family" data-wf-kind="css"')}
     <div class="wb-row2"><label>字号</label>${wbIn('text', 'font-size', wbGetStyle(elc, 'font-size'), '16px')}</div>
     ${wbSel([['', ''], ['300', '细 300'], ['400', '常规 400'], ['500', '中 500'], ['600', '半粗 600'], ['700', '粗 700']], wbGetStyle(elc, 'font-weight'), 'data-wf-prop="font-weight" data-wf-kind="css"')}
     <div class="wb-row2"><label>行高</label>${wbIn('text', 'line-height', wbGetStyle(elc, 'line-height'), '1.5')}</div>
-    ${wbSel([['', ''], ['left', '左'], ['center', '中'], ['right', '右'], ['justify', '两端']], wbGetStyle(elc, 'text-align'), 'data-wf-prop="text-align" data-wf-kind="css"')}
-    <div class="wb-row2"><label>字色</label><input type="color" data-wf-prop="color" data-wf-kind="css" value="${wbColorVal(wbGetStyle(elc, 'color'))}"></div>
-    <div class="wb-row2"><label>字距</label>${wbIn('text', 'letter-spacing', wbGetStyle(elc, 'letter-spacing'), '0')}</div>`;
+    <div class="wb-row2"><label>字距</label>${wbIn('text', 'letter-spacing', wbGetStyle(elc, 'letter-spacing'), '0')}</div>
+    <div class="wb-disp-group small">
+      ${['left','center','right','justify'].map((a) => `<button class="wb-disp ${wbGetStyle(elc, 'text-align') === a ? 'on' : ''}" data-text="${a}">${{left:'◀',center:'≡',right:'▶',justify:'▤'}[a]}</button>`).join('')}
+    </div>
+    <div class="wb-row2"><label>字色</label><input type="color" data-wf-prop="color" data-wf-kind="css" value="${wbColorVal(wbGetStyle(elc, 'color'))}"></div>`;
 
   const bg = `<div class="wb-row2"><label>背景</label><input type="color" data-wf-prop="background-color" data-wf-kind="css" value="${wbColorVal(wbGetStyle(elc, 'background-color'))}"><button class="tb small" data-wf-clear="background-color">透明</button></div>`;
 
@@ -521,17 +608,81 @@ function wbStylePanel(elc) {
     <div class="wb-row2"><label>不透明</label><input type="range" min="0" max="1" step="0.05" data-wf-prop="opacity" data-wf-kind="css" value="${wbGetStyle(elc, 'opacity') || '1'}"></div>
     ${wbSel([['', '无'], ['0 1px 3px rgba(0,0,0,.12)', '小 sm'], ['0 4px 12px rgba(0,0,0,.15)', '中 md'], ['0 10px 30px rgba(0,0,0,.18)', '大 lg']], wbGetStyle(elc, 'box-shadow'), 'data-wf-prop="box-shadow" data-wf-kind="css"')}`;
 
-  return g('布局 Layout', layout) + g('间距 Spacing', spacing) + g('排版 Typography', typ) + g('背景 Background', bg) + g('边框 Border', border) + g('效果 Effects', eff);
+  return sec('layout', 'Layout', layout) + sec('spacing', 'Spacing', spacing) + sec('size', 'Size', size) + sec('position', 'Position', position) + sec('typography', 'Typography', typ) + sec('background', 'Background', bg) + sec('border', 'Border', border) + sec('effects', 'Effects', eff);
+}
+
+function wbFlexPanel(elc) {
+  return `
+    <div class="wb-row2"><label>方向</label>${wbSel([['row', '横向 row'], ['column', '纵向 column'], ['row-reverse', 'row-reverse'], ['column-reverse', 'column-reverse']], wbGetStyle(elc, 'flex-direction'), 'data-wf-prop="flex-direction" data-wf-kind="css"')}</div>
+    <div class="wb-row2"><label>主轴</label>${wbSel([['flex-start', 'start'], ['center', 'center'], ['flex-end', 'end'], ['space-between', 'between'], ['space-around', 'around'], ['space-evenly', 'evenly']], wbGetStyle(elc, 'justify-content'), 'data-wf-prop="justify-content" data-wf-kind="css"')}</div>
+    <div class="wb-row2"><label>交叉轴</label>${wbSel([['stretch', 'stretch'], ['flex-start', 'start'], ['center', 'center'], ['flex-end', 'end']], wbGetStyle(elc, 'align-items'), 'data-wf-prop="align-items" data-wf-kind="css"')}</div>
+    <div class="wb-row2"><label>换行</label>${wbSel([['nowrap', '不换行'], ['wrap', '换行'], ['wrap-reverse', '反向']], wbGetStyle(elc, 'flex-wrap'), 'data-wf-prop="flex-wrap" data-wf-kind="css"')}</div>
+    <div class="wb-row2"><label>Gap</label>${wbIn('text', 'gap', wbGetStyle(elc, 'gap'), '0')}</div>`;
+}
+
+function wbGridPanel(elc) {
+  return `
+    <div class="wb-row2"><label>列</label>${wbIn('text', 'grid-template-columns', wbGetStyle(elc, 'grid-template-columns'), '1fr 1fr')}</div>
+    <div class="wb-row2"><label>行</label>${wbIn('text', 'grid-template-rows', wbGetStyle(elc, 'grid-template-rows'), 'auto')}</div>
+    <div class="wb-row2"><label>Gap</label>${wbIn('text', 'gap', wbGetStyle(elc, 'gap'), '0')}</div>`;
+}
+
+function wbBoxModel(elc) {
+  const g = (p) => wbIn('text', p, wbGetStyle(elc, p), '0');
+  return `
+    <div class="wb-box-wrap">
+      <div class="wb-box-label" style="top:2px;left:6px">margin</div>
+      <div class="wb-box-margin">
+        <input class="wb-box-top" data-wf-prop="margin-top" data-wf-kind="css" value="${esc(wbGetStyle(elc, 'margin-top') || '')}" placeholder="0">
+        <input class="wb-box-right" data-wf-prop="margin-right" data-wf-kind="css" value="${esc(wbGetStyle(elc, 'margin-right') || '')}" placeholder="0">
+        <input class="wb-box-bottom" data-wf-prop="margin-bottom" data-wf-kind="css" value="${esc(wbGetStyle(elc, 'margin-bottom') || '')}" placeholder="0">
+        <input class="wb-box-left" data-wf-prop="margin-left" data-wf-kind="css" value="${esc(wbGetStyle(elc, 'margin-left') || '')}" placeholder="0">
+        <div class="wb-box-label" style="top:2px;left:6px">padding</div>
+        <div class="wb-box-padding">
+          <input class="wb-box-top" data-wf-prop="padding-top" data-wf-kind="css" value="${esc(wbGetStyle(elc, 'padding-top') || '')}" placeholder="0">
+          <input class="wb-box-right" data-wf-prop="padding-right" data-wf-kind="css" value="${esc(wbGetStyle(elc, 'padding-right') || '')}" placeholder="0">
+          <input class="wb-box-bottom" data-wf-prop="padding-bottom" data-wf-kind="css" value="${esc(wbGetStyle(elc, 'padding-bottom') || '')}" placeholder="0">
+          <input class="wb-box-left" data-wf-prop="padding-left" data-wf-kind="css" value="${esc(wbGetStyle(elc, 'padding-left') || '')}" placeholder="0">
+          <div class="wb-box-content">content</div>
+        </div>
+      </div>
+    </div>`;
 }
 
 function wbBindStylePanel(elc) {
   const bs = wbState();
   const body = document.getElementById('wbInspectBody');
+
+  // 折叠面板
+  body.querySelectorAll('[data-sec-h]').forEach((h) => {
+    h.onclick = () => {
+      const sec = h.closest('.wb-sec');
+      const b = sec.querySelector('.wb-sec-body');
+      const arrow = h.querySelector('.wb-sec-arrow');
+      const show = b.style.display === 'none';
+      b.style.display = show ? '' : 'none';
+      arrow.textContent = show ? '▾' : '▸';
+    };
+  });
+
+  // display 图标按钮
+  body.querySelectorAll('[data-disp]').forEach((b) => {
+    b.onclick = () => { wbSetStyle('display', b.dataset.disp, bs.bp); wbRenderInspector(); };
+  });
+
+  // text-align 图标按钮
+  body.querySelectorAll('[data-text]').forEach((b) => {
+    b.onclick = () => { wbSetStyle('text-align', b.dataset.text, bs.bp); wbRenderInspector(); };
+  });
+
+  // 通用输入
   body.querySelectorAll('[data-wf-prop]').forEach((inp) => {
     const prop = inp.dataset.wfProp;
     inp.addEventListener('input', () => wbSetStyle(prop, inp.value, bs.bp));
     inp.addEventListener('change', () => { wbSetStyle(prop, inp.value, bs.bp); if (prop === 'display') wbRenderInspector(); });
   });
+
+  // 透明按钮
   body.querySelectorAll('[data-wf-clear]').forEach((b) => {
     b.onclick = () => { const p = b.dataset.wfClear; wbSetStyle(p, '', bs.bp); wbRenderInspector(); };
   });
@@ -541,7 +692,7 @@ function wbBindStylePanel(elc) {
 
 function wbSettingsPanel(elc) {
   const tag = elc.tagName.toLowerCase();
-  let html = '<div class="wb-sec"><div class="wb-sec-h">元素</div>';
+  let html = '<div class="wb-sec"><button class="wb-sec-h" data-sec-h>Element<span class="wb-sec-arrow">▾</span></button><div class="wb-sec-body">';
   html += `<div class="wb-row2"><label>标签</label><input value="${tag}" disabled></div>`;
   if (WB_TEXT_TAGS.includes(elc.tagName)) {
     html += `<div class="wb-field"><label>文本内容</label><textarea data-wf-text>${esc(elc.textContent)}</textarea></div>`;
@@ -550,13 +701,23 @@ function wbSettingsPanel(elc) {
   if (tag === 'img') html += `<div class="wb-field"><label>图片 src</label><input type="text" data-wf-attr="src" value="${esc(elc.getAttribute('src') || '')}"></div>`;
   html += `<div class="wb-field"><label>class</label><input type="text" data-wf-prop2="className" value="${esc(elc.className)}"></div>`;
   html += `<div class="wb-field"><label>id</label><input type="text" data-wf-prop2="id" value="${esc(elc.id)}"></div>`;
-  html += '</div>';
+  html += '</div></div>';
   html += '<div class="wb-sec"><button class="tb danger wb-del" id="wbDelEl">删除元素</button></div>';
   return html;
 }
 
 function wbBindSettingsPanel(elc) {
   const body = document.getElementById('wbInspectBody');
+  body.querySelectorAll('[data-sec-h]').forEach((h) => {
+    h.onclick = () => {
+      const sec = h.closest('.wb-sec');
+      const b = sec.querySelector('.wb-sec-body');
+      const arrow = h.querySelector('.wb-sec-arrow');
+      const show = b.style.display === 'none';
+      b.style.display = show ? '' : 'none';
+      arrow.textContent = show ? '▾' : '▸';
+    };
+  });
   const ta = body.querySelector('[data-wf-text]');
   if (ta) ta.addEventListener('input', () => { elc.textContent = ta.value; wbSerializeSoon(); });
   const href = body.querySelector('[data-wf-attr="href"]');
