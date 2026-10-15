@@ -242,6 +242,17 @@ function renderEditorDetail() {
     };
   }
 
+  // 主题面板
+  const themePanel = el('div', 'ed-theme-panel' + (state.ed.themeOpen ? ' show' : ''));
+  themePanel.innerHTML = edThemePanelHTML();
+  // 搜索结果浮层
+  const srPanel = el('div', 'ed-search-results' + (state.ed.searchResults.length ? ' show' : ''));
+  srPanel.id = 'edSearchResults';
+  srPanel.innerHTML = state.ed.searchResults.length ? edRenderSearchResults() : '';
+  // 状态栏
+  const statusbar = el('div', 'ed-statusbar');
+  statusbar.id = 'edStatus';
+
   const workspace = el('div', 'ed-workspace');
   workspace.appendChild(searchPanel);
   workspace.appendChild(area);
@@ -259,17 +270,6 @@ function renderEditorDetail() {
     const files = e.dataTransfer.files;
     if (files && files.length) edHandleDroppedFiles(files);
   };
-
-  // 主题面板
-  const themePanel = el('div', 'ed-theme-panel' + (state.ed.themeOpen ? ' show' : ''));
-  themePanel.innerHTML = edThemePanelHTML();
-  // 搜索结果浮层
-  const srPanel = el('div', 'ed-search-results' + (state.ed.searchResults.length ? ' show' : ''));
-  srPanel.id = 'edSearchResults';
-  srPanel.innerHTML = state.ed.searchResults.length ? edRenderSearchResults() : '';
-  // 状态栏
-  const statusbar = el('div', 'ed-statusbar');
-  statusbar.id = 'edStatus';
   // 实例化 CodeMirror
   for (let i = 0; i < paneCount; i++) {
     const path = state.ed.panePaths[i];
@@ -415,6 +415,10 @@ async function edLoadFile(filePath) {
   }
   renderEditorList();
   renderEditorDetail();
+}
+
+function edOpenFile(filePath) {
+  edLoadFile(filePath);
 }
 
 function edOpenFileInOtherPane(filePath) {
