@@ -105,9 +105,10 @@ const state = {
     panePaths: ['', ''], // 分屏时两个窗格各自打开的文件
     split: false,        // 是否分屏
     preview: true,       // 是否显示实时预览
+    visual: false,       // 是否进入「可视化（所见即所得）编辑」模式
     searchQuery: '',
     searchResults: [],
-    theme: { preset: 'dark', bg: '#174A45', sidebar: '#0F2E2B', accent: '#4ECDC4', codeBg: '#0b2623', codeTxt: '#eafffb', bgImage: '', bgOpacity: 1 },
+    theme: { preset: 'dark', bg: '#174A45', sidebar: '#0F2E2B', bar: '#1A5C56', accent: '#4ECDC4', codeBg: '#0b2623', codeTxt: '#eafffb', bgImage: '', bgOpacity: 1 },
   },
 };
 

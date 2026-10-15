@@ -3617,6 +3617,54 @@ pre.preview-md {
 }
 .ed-splitter:hover { background: var(--ed-accent); }
 
+/* 可视化（所见即所得）编辑 */
+.ed-area.visual .ed-pane { flex: 1; }
+.ed-pane.visual { background: #fff; }
+.ed-visual-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  background: var(--ed-sidebar);
+  border-bottom: 1px solid var(--ed-bar);
+  flex: none;
+}
+.ed-visual-toolbar button {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--ed-bar);
+  border-radius: 6px;
+  background: var(--ed-code-bg);
+  color: var(--ed-code-txt);
+  font-size: 13px;
+  cursor: pointer;
+  font-family: var(--mono, 'JetBrains Mono', ui-monospace, monospace);
+}
+.ed-visual-toolbar button:hover { border-color: var(--ed-accent); color: var(--ed-accent); }
+.ed-visual-toolbar .sep { width: 1px; height: 18px; background: var(--ed-bar); margin: 0 4px; }
+.ed-visual {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 28px;
+  background: #fff;
+  color: #1c1c1c;
+  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  outline: none;
+}
+.ed-visual:focus { box-shadow: inset 0 0 0 2px var(--ed-accent); }
+.ed-visual img { max-width: 100%; height: auto; }
+.ed-visual h1 { font-size: 1.9em; margin: 0.4em 0 0.3em; }
+.ed-visual h2 { font-size: 1.5em; margin: 0.4em 0 0.3em; }
+.ed-visual h3 { font-size: 1.25em; margin: 0.4em 0 0.3em; }
+.ed-visual a { color: #1a73e8; text-decoration: underline; }
+.ed-visual ul, .ed-visual ol { padding-left: 1.6em; margin: 0.4em 0; }
+.ed-visual p { margin: 0.5em 0; }
+
 /* CodeMirror 在编辑器中的样式 */
 .ed-cm .CodeMirror {
   height: 100% !important;
