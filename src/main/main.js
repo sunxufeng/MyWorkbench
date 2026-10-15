@@ -354,7 +354,7 @@ function registerIpc() {
     return { canceled: r.canceled, path: (r.filePaths && r.filePaths[0]) || '' };
   });
 
-  handle('editor:list', async (_e, dir) => {
+  handle('editor:list', async (dir) => {
     async function walk(p) {
       let entries = [];
       try {
@@ -381,7 +381,7 @@ function registerIpc() {
     return { name: path.basename(dir), path: dir, type: 'dir', children };
   });
 
-  handle('editor:read', async (_e, filePath, encoding = 'utf8') => {
+  handle('editor:read', async (filePath, encoding = 'utf8') => {
     try {
       if (encoding === 'base64') {
         const buf = await fsp.readFile(filePath);
@@ -394,7 +394,7 @@ function registerIpc() {
     }
   });
 
-  handle('editor:write', async (_e, filePath, content) => {
+  handle('editor:write', async (filePath, content) => {
     try {
       await fsp.writeFile(filePath, content, 'utf8');
       return { ok: true };
