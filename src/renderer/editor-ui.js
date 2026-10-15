@@ -151,6 +151,9 @@ function renderEditorDetail() {
     return;
   }
 
+  // 设计模式（Webflow 式可视化建站）接管整个右栏
+  if (state.ed.visual) { renderBuilder(); return; }
+
   // 顶栏按钮
   const saveBtn = mkTb('💾 保存', 'primary', edSaveActive, '⌘S');
   const fmtBtn = mkTb('✨ 格式化', '', edFormatActive, '美化 HTML 缩进');
@@ -160,17 +163,17 @@ function renderEditorDetail() {
   const activeForVis = state.ed.panePaths[edActivePane] || state.ed.panePaths[0] || '';
   const visIsHtml = !!activeForVis && ['html', 'htm', 'xhtml'].includes((activeForVis.split('.').pop() || '').toLowerCase());
   const visBtn = mkTb(
-    state.ed.visual ? '⟨⟩ 代码' : '✎ 可视化',
+    state.ed.visual ? '⟨⟩ 代码' : '🎨 设计',
     state.ed.visual ? 'on' : '',
     edToggleVisual,
-    state.ed.visual ? '切回源码编辑' : '直接在页面上改文字 / 内容（所见即所得）'
+    state.ed.visual ? '切回源码编辑' : 'Webflow 式可视化建站：加元素、点选、改样式'
   );
   if (!visIsHtml) {
     visBtn.disabled = true;
     visBtn.style.opacity = '0.45';
     visBtn.style.cursor = 'not-allowed';
     visBtn.onclick = null;
-    visBtn.title = '仅 HTML 文件支持可视化编辑';
+    visBtn.title = '仅 HTML 文件支持可视化设计';
   }
   const imgBtn = mkTb('🖼 插入图片', '', edInsertImageFromPicker, '从磁盘选择图片插入');
   const searchBtn = mkTb('🔍 搜索', '', edToggleSearch, '跨文件搜索');
@@ -239,22 +242,9 @@ function renderEditorDetail() {
     pbar.append(sel, closeBtn);
     pane.appendChild(pbar);
 
-    if (state.ed.visual) {
-      // 可视化编辑：轻量格式工具栏 + 可编辑的页面
-      const tb = el('div', 'ed-visual-toolbar');
-      tb.id = 'edVisualToolbar' + i;
-      tb.innerHTML = edVisualToolbarHTML();
-      pane.appendChild(tb);
-      const vis = el('div', 'ed-visual');
-      vis.id = 'edVisual' + i;
-      vis.setAttribute('contenteditable', 'true');
-      vis.setAttribute('spellcheck', 'false');
-      pane.appendChild(vis);
-    } else {
-      const cmHost = el('div', 'ed-cm-host');
-      cmHost.id = 'edCmHost' + i;
-      pane.appendChild(cmHost);
-    }
+    const cmHost = el('div', 'ed-cm-host');
+    cmHost.id = 'edCmHost' + i;
+    pane.appendChild(cmHost);
     area.appendChild(pane);
 
     // 分屏分隔条
@@ -308,17 +298,11 @@ function renderEditorDetail() {
     const files = e.dataTransfer.files;
     if (files && files.length) edHandleDroppedFiles(files);
   };
-  // 实例化 CodeMirror / 可视化编辑区
+  // 实例化 CodeMirror（设计模式下由 renderBuilder 接管，不走这里）
   for (let i = 0; i < paneCount; i++) {
     const path = state.ed.panePaths[i];
-    if (state.ed.visual) {
-      edLoadVisual(i, path);
-      const tb = document.getElementById('edVisualToolbar' + i);
-      if (tb) edBindVisualToolbar(tb, i);
-    } else {
-      const cm = edCreateCM('edCmHost' + i, path);
-      edEditors[i] = cm;
-    }
+    const cm = edCreateCM('edCmHost' + i, path);
+    edEditors[i] = cm;
   }
   edUpdatePaneActive();
   edUpdatePreview();
@@ -367,10 +351,6 @@ function edCreateCM(hostId, path) {
 }
 
 function edRenderPane(i) {
-  if (state.ed.visual) {
-    edLoadVisual(i, state.ed.panePaths[i]);
-    return;
-  }
   const cm = edEditors[i];
   if (!cm) return;
   const path = state.ed.panePaths[i];
@@ -432,104 +412,7 @@ function edRebuild(src, newBody) {
   return newBody;
 }
 
-/** 在指定窗格的 contenteditable 里装载文件内容 */
-function edLoadVisual(i, path) {
-  const vis = document.getElementById('edVisual' + i);
-  if (!vis) return;
-  const tab = path ? state.ed.tabs[path] : null;
-  vis.innerHTML = tab ? edExtractBody(tab.content) : '';
-  vis.dataset.path = path || '';
-  clearTimeout(vis._t);
-  vis.oninput = () => edOnVisualInput(i);
-}
-
-/** 编辑区内容变化时，同步回源码、标记脏、刷新树与状态 */
-function edOnVisualInput(i) {
-  const vis = document.getElementById('edVisual' + i);
-  if (!vis) return;
-  const path = vis.dataset.path;
-  if (!path || !state.ed.tabs[path]) return;
-  const tab = state.ed.tabs[path];
-  const newBody = vis.innerHTML;
-  tab.content = edRebuild(tab.content, newBody);
-  tab.dirty = tab.content !== tab.original;
-  edActivePane = i;
-  renderEditorList();
-  clearTimeout(vis._t);
-  vis._t = setTimeout(() => edUpdateStatus(), 300);
-  edUpdateStatus();
-}
-
-/** 可视化模式的轻量格式工具栏 */
-function edVisualToolbarHTML() {
-  const btn = (cmd, label, title, val) =>
-    `<button type="button" data-cmd="${cmd}"${val ? ` data-val="${val}"` : ''} title="${esc(title)}">${label}</button>`;
-  return [
-    btn('bold', 'B', '加粗'),
-    btn('italic', 'I', '斜体'),
-    btn('underline', 'U', '下划线'),
-    '<span class="sep"></span>',
-    btn('formatBlock', 'H1', '一级标题', 'h1'),
-    btn('formatBlock', 'H2', '二级标题', 'h2'),
-    btn('formatBlock', 'H3', '三级标题', 'h3'),
-    '<span class="sep"></span>',
-    btn('insertUnorderedList', '• 列表', '无序列表'),
-    btn('insertOrderedList', '1. 列表', '有序列表'),
-    '<span class="sep"></span>',
-    btn('createLink', '🔗 链接', '插入 / 编辑链接'),
-    btn('insertImage', '🖼 图片', '插入图片'),
-    btn('removeFormat', '⌫ 清除', '清除格式'),
-  ].join('');
-}
-
-function edBindVisualToolbar(toolbar, i) {
-  if (!toolbar) return;
-  toolbar.querySelectorAll('button[data-cmd]').forEach((b) => {
-    // mousedown 时阻止默认，避免点击按钮后编辑区失去选中文本
-    b.onmousedown = (e) => { e.preventDefault(); };
-    b.onclick = () => edVisualCommand(b.dataset.cmd, b.dataset.val || null, i);
-  });
-}
-
-function edVisualCommand(cmd, val, i) {
-  const vis = document.getElementById('edVisual' + i);
-  if (!vis) return;
-  edActivePane = i;
-  vis.focus();
-  if (cmd === 'createLink') {
-    const url = prompt('链接地址（URL）：', 'https://');
-    if (!url) return;
-    document.execCommand('createLink', false, url);
-  } else if (cmd === 'insertImage') {
-    edVisualInsertImage(vis);
-    return;
-  } else if (cmd === 'formatBlock') {
-    document.execCommand('formatBlock', false, '<' + (val || 'p') + '>');
-  } else {
-    document.execCommand(cmd, false, val);
-  }
-  edOnVisualInput(i);
-}
-
-async function edVisualInsertImage(vis) {
-  const r = await act(API.pickFiles('image'));
-  if (!r || !r.length) return;
-  const filePath = r[0];
-  let src = '';
-  if (state.ed.root && filePath.startsWith(state.ed.root)) {
-    src = edRelPath(filePath).replace(/\\/g, '/');
-  } else {
-    const rr = await act(API.editor.read(filePath, 'base64'));
-    if (!rr || rr.error || !rr.content) { toast('读取图片失败', 'err'); return; }
-    const ext = (filePath.split('.').pop() || 'png').toLowerCase();
-    src = `data:image/${ext === 'svg' ? 'svg+xml' : ext};base64,${rr.content}`;
-  }
-  vis.focus();
-  document.execCommand('insertHTML', false, `<img src="${esc(src)}" alt="" style="max-width:100%">`);
-  edOnVisualInput(edActivePane);
-}
-
-/** 切换「代码 / 可视化」模式 */
+/** 切换「代码 / 设计（Webflow 式可视化建站）」模式 */
 function edToggleVisual() {
   const activeForVis = state.ed.panePaths[edActivePane] || state.ed.panePaths[0] || '';
   const visIsHtml = !!activeForVis && ['html', 'htm', 'xhtml'].includes((activeForVis.split('.').pop() || '').toLowerCase());
@@ -843,13 +726,6 @@ async function edInsertImage(filePath) {
   const tag = `<img src="${esc(src)}" alt="" style="max-width:100%">`;
   if (cm) {
     cm.replaceSelection(tag);
-    toast('已插入图片', 'ok');
-  } else if (state.ed.visual) {
-    const vis = document.getElementById('edVisual' + edActivePane);
-    if (!vis) { toast('先打开一个 HTML 文件再插入图片', 'warn'); return; }
-    vis.focus();
-    document.execCommand('insertHTML', false, tag);
-    edOnVisualInput(edActivePane);
     toast('已插入图片', 'ok');
   } else {
     toast('先打开一个文件再插入图片', 'warn');
