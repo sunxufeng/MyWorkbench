@@ -95,3 +95,15 @@ echo "==> 完成：$APP"
 echo "    版本   $("$PB" -c 'Print :CFBundleShortVersionString' "$PLIST")"
 echo "    标识   $("$PB" -c 'Print :CFBundleIdentifier' "$PLIST")"
 echo "    体积   $(du -sh "$APP" | cut -f1)"
+
+# 9. 部署到 /Applications 并清理 dist 构建产物
+#    dist 下的 .app 与安装包 bundle id 完全相同（com.arete.myworkbench），
+#    LaunchPad 会把两个位置的同名 app 都索引出来，导致出现「两个图标」。
+#    所以打包校验通过后直接装到 /Applications，然后把 dist 里的构建产物删掉。
+echo "==> 部署到 /Applications/My Workbench.app"
+pkill -f "My Workbench" 2>/dev/null || true
+sleep 1
+ditto "$APP" "/Applications/My Workbench.app"
+echo "==> 已部署，清理 dist 构建产物"
+rm -rf "$APP"
+echo "    dist 目录剩余条目：$(ls -1 "$OUT" 2>/dev/null | wc -l | tr -d ' ') 项"
