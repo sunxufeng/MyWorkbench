@@ -139,6 +139,7 @@ function edBuildTree(node, depth) {
 
 function renderEditorDetail() {
   const detail = $('#detailScroll');
+  detail.classList.add('ed-mode');
   detail.innerHTML = '';
   const bar = $('#detailBar');
   bar.innerHTML = '';
@@ -257,9 +258,31 @@ function renderEditorDetail() {
 
   // 预览区（可视化模式下，编辑区本身即所见即所得，不再叠加右栏预览）
   if (state.ed.preview && !state.ed.visual) {
+    // 编辑区与预览区之间的 resizer
+    const resizer = el('div', 'ed-preview-resizer');
+    resizer.title = '拖拽调整预览区宽度';
+    area.appendChild(resizer);
+
     const preview = el('div', 'ed-preview');
-    preview.innerHTML = `<div class="ed-preview-head"><span>实时预览</span><button class="tb small" id="edOpenBrowser">外部浏览器打开</button></div><div class="ed-preview-body" id="edPreviewBody"></div>`;
+    preview.style.width = (state.ed.previewWidth || 420) + 'px';
+    preview.innerHTML = `<div class="ed-preview-head"><span>实时预览</span><div class="ed-preview-actions"><button class="tb small" id="edPreviewPrev" title="上一页">‹</button><button class="tb small" id="edPreviewNext" title="下一页">›</button><button class="tb small" id="edOpenBrowser">外部打开</button><button class="tb small" id="edClosePreview">关闭 ✕</button></div></div><div class="ed-preview-body" id="edPreviewBody"></div>`;
     area.appendChild(preview);
+    const sendKey = (key, code, keyCode) => {
+      const frame = document.querySelector('#edPreviewBody iframe');
+      if (!frame) return;
+      try {
+        const win = frame.contentWindow;
+        const doc = frame.contentDocument;
+        win.focus();
+        const ev = new KeyboardEvent('keydown', { key, code, keyCode, which: keyCode, bubbles: true, cancelable: true });
+        doc.dispatchEvent(ev);
+        win.dispatchEvent(ev);
+      } catch (err) {}
+    };
+    const prevBtn = preview.querySelector('#edPreviewPrev');
+    if (prevBtn) prevBtn.onclick = () => sendKey('ArrowLeft', 'ArrowLeft', 37);
+    const nextBtn = preview.querySelector('#edPreviewNext');
+    if (nextBtn) nextBtn.onclick = () => sendKey('ArrowRight', 'ArrowRight', 39);
     const openBrowser = preview.querySelector('#edOpenBrowser');
     if (openBrowser) openBrowser.onclick = () => {
       const html = edActiveContent();
@@ -268,6 +291,38 @@ function renderEditorDetail() {
       const url = URL.createObjectURL(blob);
       API.openExternal(url);
     };
+    const closePreview = preview.querySelector('#edClosePreview');
+    if (closePreview) closePreview.onclick = () => { state.ed.preview = false; renderEditorDetail(); };
+
+    // 拖拽调整预览区宽度
+    let pvDragging = false;
+    let pvStartX = 0;
+    let pvStartW = 0;
+    resizer.addEventListener('mousedown', (e) => {
+      pvDragging = true;
+      pvStartX = e.clientX;
+      pvStartW = preview.offsetWidth;
+      resizer.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!pvDragging) return;
+      const delta = pvStartX - e.clientX;
+      const newW = Math.max(200, Math.min(800, pvStartW + delta));
+      preview.style.width = newW + 'px';
+      state.ed.previewWidth = newW;
+    });
+    document.addEventListener('mouseup', () => {
+      if (!pvDragging) return;
+      pvDragging = false;
+      resizer.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    });
+
+    edUpdatePreview();
   }
 
   // 主题面板
@@ -676,7 +731,16 @@ function edUpdatePreview() {
   const html = edWrapPreview(tab.content);
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
-  body.innerHTML = `<iframe src="${url}" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>`;
+  const frameId = 'edPreviewFrame' + Date.now();
+  body.innerHTML = `<iframe id="${frameId}" src="${url}" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>`;
+  const frame = document.getElementById(frameId);
+  if (frame) {
+    frame.onload = () => {
+      try { frame.contentWindow.focus(); } catch (e) {}
+    };
+    // 点击预览区时把焦点交给 iframe，便于 reveal.js 等接收键盘事件
+    frame.onclick = () => { try { frame.contentWindow.focus(); } catch (e) {} };
+  }
 }
 
 function edWrapPreview(content) {
@@ -869,3 +933,25 @@ function edUpdateStatus() {
 
 // 初始化主题
 edInitTheme();
+
+/* 把方向键/空格/Page 等转发给预览 iframe，让 reveal.js 翻页可用 */
+document.addEventListener('keydown', (e) => {
+  const keys = ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', ' ', 'Enter'];
+  if (!keys.includes(e.key)) return;
+  const tag = (e.target && e.target.tagName) || '';
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || (e.target && e.target.closest('.CodeMirror'))) return;
+  const frame = document.querySelector('#edPreviewBody iframe');
+  if (!frame) return;
+  try {
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    win.focus();
+    const ev = new KeyboardEvent('keydown', {
+      key: e.key, code: e.code, keyCode: e.keyCode, which: e.which,
+      ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, altKey: e.altKey,
+      bubbles: true, cancelable: true
+    });
+    doc.dispatchEvent(ev);
+    win.dispatchEvent(ev);
+  } catch (err) {}
+});

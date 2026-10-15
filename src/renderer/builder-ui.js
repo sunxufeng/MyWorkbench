@@ -101,6 +101,15 @@ function renderBuilder() {
   wbRenderLeftPanel();
   wbRenderInspectTabs();
   wbLoadCanvas();
+
+  // Navigator Delete/Backspace 删除选中元素（不在输入框内时）
+  detail.onkeydown = (e) => {
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+    const tag = (e.target && e.target.tagName) || '';
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || e.target.isContentEditable) return;
+    e.preventDefault();
+    wbDeleteSelected();
+  };
 }
 
 /* -------------------------------------------------------------- 左侧面板切换 */
@@ -388,6 +397,8 @@ function wbAddElement(type) {
   const doc = wbFrame().contentDocument;
   if (!doc) return;
   const bs = wbState();
+  // 添加元素时自动回到 Navigator，方便看到新元素并删除
+  if (bs.leftTab !== 'navigator') wbToggleLeft('navigator');
   const sel = bs.selId ? wbEl(bs.selId) : null;
   let parent = doc.body;
   if (sel) parent = wbIsContainer(sel) ? sel : (sel.parentElement && sel.parentElement.closest('[data-wf-id]') ? sel.parentElement.closest('[data-wf-id]') : doc.body);
@@ -561,6 +572,9 @@ function wbStylePanel(elc) {
   const badge = bp !== 'desktop' ? ` <span class="wb-bp-badge">${bp}</span>` : '';
   const sec = (id, title, inner, open = true) => `<div class="wb-sec" data-sec="${id}"><button class="wb-sec-h" data-sec-h>${esc(title)}${badge}<span class="wb-sec-arrow">${open ? '▾' : '▸'}</span></button><div class="wb-sec-body" ${open ? '' : 'style="display:none"'}>${inner}</div></div>`;
 
+  const tag = elc.tagName.toLowerCase();
+  const header = `<div class="wb-el-head"><span class="wb-el-tag">${esc(tag)}</span><button class="tb danger small" id="wbDelElStyle">删除</button></div>`;
+
   const display = wbGetStyle(elc, 'display') || 'block';
   const layout = `
     <div class="wb-disp-group">
@@ -608,7 +622,7 @@ function wbStylePanel(elc) {
     <div class="wb-row2"><label>不透明</label><input type="range" min="0" max="1" step="0.05" data-wf-prop="opacity" data-wf-kind="css" value="${wbGetStyle(elc, 'opacity') || '1'}"></div>
     ${wbSel([['', '无'], ['0 1px 3px rgba(0,0,0,.12)', '小 sm'], ['0 4px 12px rgba(0,0,0,.15)', '中 md'], ['0 10px 30px rgba(0,0,0,.18)', '大 lg']], wbGetStyle(elc, 'box-shadow'), 'data-wf-prop="box-shadow" data-wf-kind="css"')}`;
 
-  return sec('layout', 'Layout', layout) + sec('spacing', 'Spacing', spacing) + sec('size', 'Size', size) + sec('position', 'Position', position) + sec('typography', 'Typography', typ) + sec('background', 'Background', bg) + sec('border', 'Border', border) + sec('effects', 'Effects', eff);
+  return header + sec('layout', 'Layout', layout) + sec('spacing', 'Spacing', spacing) + sec('size', 'Size', size) + sec('position', 'Position', position) + sec('typography', 'Typography', typ) + sec('background', 'Background', bg) + sec('border', 'Border', border) + sec('effects', 'Effects', eff);
 }
 
 function wbFlexPanel(elc) {
@@ -686,6 +700,10 @@ function wbBindStylePanel(elc) {
   body.querySelectorAll('[data-wf-clear]').forEach((b) => {
     b.onclick = () => { const p = b.dataset.wfClear; wbSetStyle(p, '', bs.bp); wbRenderInspector(); };
   });
+
+  // Style 面板顶部删除按钮
+  const delStyle = body.querySelector('#wbDelElStyle');
+  if (delStyle) delStyle.onclick = () => wbDeleteSelected();
 }
 
 /* -------------------------------------------------------------- 检查器：设置 */
@@ -729,14 +747,19 @@ function wbBindSettingsPanel(elc) {
   const idn = body.querySelector('[data-wf-prop2="id"]');
   if (idn) idn.addEventListener('input', () => { elc.id = idn.value; wbSerializeSoon(); });
   const del = body.querySelector('#wbDelEl');
-  if (del) del.onclick = () => {
-    elc.remove();
-    wbRenumber();
-    wbBuildLayers();
-    wbHideTag();
-    wbSelect(null);
-    wbSerializeSoon();
-  };
+  if (del) del.onclick = () => wbDeleteSelected();
+}
+
+function wbDeleteSelected() {
+  const bs = wbState();
+  const elc = bs.selId ? wbEl(bs.selId) : null;
+  if (!elc) return;
+  elc.remove();
+  wbRenumber();
+  wbBuildLayers();
+  wbHideTag();
+  wbSelect(null);
+  wbSerializeSoon();
 }
 
 /* -------------------------------------------------------------- 序列化回源码 */

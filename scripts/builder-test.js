@@ -101,16 +101,36 @@ module.exports = async function ({ win, app, shot, errors }) {
   assert(added.layers >= 4, '图层树列出了元素');
   assert(added.dirty, '改动被标记为未保存');
 
-  // 点选 h2 并改样式（颜色 + 字号），应内联写入并回写源码
-  const styled = await run(`(async () => {
+  // 删除刚添加的 heading（测试 Style 面板删除按钮 / wbDeleteSelected）
+  const deleted = await run(`(async () => {
     const doc = document.getElementById('wbFrame').contentDocument;
     const h2 = doc.querySelector('h2');
-    const id = h2.getAttribute('data-wf-id');
+    wbSelect(h2.getAttribute('data-wf-id'));
+    await new Promise(r => setTimeout(r, 100));
+    wbDeleteSelected();
+    await new Promise(r => setTimeout(r, 400));
+    const tab = state.ed.tabs[${JSON.stringify(htmlPath)}];
+    return {
+      headingTextGone: !tab.content.includes('标题文本'),
+      noSel: !state.ed.builderState.selId,
+      dirtyAfter: tab.dirty,
+    };
+  })()`);
+  log('删除元素：' + JSON.stringify(deleted));
+  assert(deleted.headingTextGone, '标题元素被删除，源码不再包含「标题文本」');
+  assert(deleted.noSel, '删除后无选中项');
+  assert(deleted.dirtyAfter, '删除后源码仍标记未保存');
+
+  // 点选 section 并改样式（颜色 + 字号），应内联写入并回写源码
+  const styled = await run(`(async () => {
+    const doc = document.getElementById('wbFrame').contentDocument;
+    const sec = doc.querySelector('section');
+    const id = sec.getAttribute('data-wf-id');
     wbSelect(id);
     wbSetStyle('color', '#ff0000', 'desktop');
     wbSetStyle('font-size', '28px', 'desktop');
     await new Promise(r => setTimeout(r, 400));
-    const el = document.getElementById('wbFrame').contentDocument.querySelector('h2');
+    const el = document.getElementById('wbFrame').contentDocument.querySelector('section');
     const tab = state.ed.tabs[${JSON.stringify(htmlPath)}];
     return {
       inlineColor: el.style.color,
@@ -129,8 +149,8 @@ module.exports = async function ({ win, app, shot, errors }) {
   const bp = await run(`(async () => {
     wbSetBp('tablet');
     const doc = document.getElementById('wbFrame').contentDocument;
-    const h2 = doc.querySelector('h2');
-    const id = h2.getAttribute('data-wf-id');
+    const sec = doc.querySelector('section');
+    const id = sec.getAttribute('data-wf-id');
     wbSelect(id);
     wbSetStyle('padding', '10px', 'tablet');
     await new Promise(r => setTimeout(r, 400));
@@ -157,7 +177,7 @@ module.exports = async function ({ win, app, shot, errors }) {
     edToggleVisual();
     await new Promise(r => setTimeout(r, 80));
     const cm = edActiveCM();
-    return { builder: state.ed.visual, cmHas: cm ? cm.getValue().includes('标题文本') : false };
+    return { builder: state.ed.visual, cmHas: cm ? cm.getValue().includes('新区块') : false };
   })()`);
   log('切回代码：' + JSON.stringify(back));
   assert(!back.builder, '已切回代码模式');
@@ -172,7 +192,7 @@ module.exports = async function ({ win, app, shot, errors }) {
   assert(!saved.dirty, '保存后标记已清除');
 
   const onDisk = fs.readFileSync(htmlPath, 'utf8').toLowerCase();
-  assert(onDisk.includes('标题文本'), '磁盘文件已包含设计器新增的 heading');
+  assert(onDisk.includes('新区块'), '磁盘文件已包含设计器新增的 section');
   assert(onDisk.includes('color: rgb(255, 0, 0)') || onDisk.includes('color:#ff0000'), '磁盘文件已包含内联颜色样式');
   assert(onDisk.includes('data-wf-bp'), '磁盘文件已包含断点样式块');
 

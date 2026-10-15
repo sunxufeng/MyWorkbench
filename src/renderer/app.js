@@ -2154,6 +2154,8 @@ function mkTb(label, cls, onclick, title) {
 }
 
 function renderDetail() {
+  const detailScroll = $('#detailScroll');
+  if (detailScroll) detailScroll.classList.remove('ed-mode');
   if (state.view === 'overview') {
     return renderOverviewPage();
   }
@@ -4301,6 +4303,36 @@ function bindEvents() {
   $('#detailScroll').addEventListener('scroll', (e) => {
     $('#detailBar').classList.toggle('stuck', e.target.scrollTop > 4);
   });
+
+  // 列表栏与右栏之间的拖拽调整宽度
+  const listResizer = $('#listResizer');
+  if (listResizer) {
+    let dragging = false;
+    let startX = 0;
+    let startW = 0;
+    listResizer.addEventListener('mousedown', (e) => {
+      dragging = true;
+      startX = e.clientX;
+      startW = parseFloat(getComputedStyle($('#app')).gridTemplateColumns.split(' ')[1]);
+      listResizer.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const delta = e.clientX - startX;
+      const newW = Math.max(180, Math.min(520, startW + delta));
+      $('#app').style.setProperty('--col-list', newW + 'px');
+    });
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      listResizer.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    });
+  }
 
   // 全局快捷键
   document.addEventListener('keydown', (e) => {
