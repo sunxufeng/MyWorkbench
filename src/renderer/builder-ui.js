@@ -286,6 +286,10 @@ function wbOnPointerDown(e) {
     wbDragSrc = null;
     return;
   }
+  // 关键修复：必须用 iframe 的 contentDocument 挂 move/up 监听。
+  // 这里的 doc 不能依赖全局 document（那是父页面），否则拖拽监听会被挂到父页面，
+  // 而鼠标在 iframe 上方移动时父页面收不到 pointermove —— 表现为「能选中、但拖不动」。
+  const doc = wbFrame().contentDocument;
   wbDragSrc = t;
   wbDraggedId = null;
   wbDragMoved = false;
