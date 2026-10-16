@@ -346,9 +346,22 @@ function wbComputeDropAt(x, y) {
   const doc = wbFrame().contentDocument;
   const dragged = wbDraggedId ? wbEl(wbDraggedId) : null;
   if (!doc || !dragged) return null;
+  // 关键：计算落点前先把落点指示线藏起来，否则 elementFromPoint 会先命中它
+  // （它没有 data-wf-id），导致松手时返回 null、元素「拖不动」。即便样式里写了
+  // pointer-events:none，这里也做双保险，彻底消除这一类拦截。
+  if (wbDropLine) wbDropLine.style.display = 'none';
   const node = doc.elementFromPoint(x, y);
-  const target = node && node.closest ? node.closest('[data-wf-id]') : null;
-  if (!target || target === dragged || dragged.contains(target)) return null;
+  if (wbDropLine) wbDropLine.style.display = '';
+  let target = node && node.closest ? node.closest('[data-wf-id]') : null;
+  if (!target || target === dragged || dragged.contains(target)) {
+    // 落到画布空白处（body / html 根，或元素之间的缝隙）时，回退为追加到 body 末尾，
+    // 而不是原地不动——否则行内小元素（span）很容易落在缝隙里显得「拖不动」。
+    if (node && (node.tagName === 'BODY' || node.tagName === 'HTML' ||
+        (node.parentNode && (node.parentNode.tagName === 'BODY' || node.parentNode.tagName === 'HTML')))) {
+      return { targetId: null, position: 'inside', target: doc.body, isBody: true };
+    }
+    return null;
+  }
   const rect = target.getBoundingClientRect();
   const ry = y - rect.top;
   const h = Math.max(rect.height, 1);
@@ -401,7 +414,8 @@ function wbHideDropIndicator() {
 
 function wbMoveElement(srcId, drop) {
   const src = wbEl(srcId);
-  const target = wbEl(drop.targetId);
+  const doc = wbFrame().contentDocument;
+  const target = drop.targetId ? wbEl(drop.targetId) : (drop.isBody && doc ? doc.body : null);
   if (!src || !target) return;
   if (drop.position === 'inside' && (src === target || src.contains(target))) drop.position = 'after';
   if (drop.position === 'before') {
