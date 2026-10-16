@@ -189,6 +189,49 @@ module.exports = async function ({ win, app, shot, errors }) {
   assert(spanDrag.layers >= 4, '图层树保持完整');
   assert(spanDrag.dirty, '拖拽后源码仍标记未保存');
 
+  // 图层树拖拽（父文档原生 DnD，可靠入口）：把第一个元素拖到第二个元素之前
+  const layerDrag = await run(`(async () => {
+    wbToggleLeft('navigator');
+    await new Promise(r => setTimeout(r, 50));
+    const rows = Array.from(document.querySelectorAll('#wbLayerTree .wb-layer'));
+    if (rows.length < 2) return { skip: true, rows: rows.length };
+    const srcRow = rows[0];
+    const tgtRow = rows[1];
+    const srcId = srcRow.dataset.id;
+    const tgtId = tgtRow.dataset.id;
+    const doc = document.getElementById('wbFrame').contentDocument;
+    const srcEl = doc.querySelector('[data-wf-id="' + srcId + '"]');
+    const beforeParent = srcEl.parentElement.tagName;
+    // 模拟 dragover（上 10% → before）+ drop
+    const rect = tgtRow.getBoundingClientRect();
+    const fakeOver = { target: tgtRow, clientY: rect.top + rect.height * 0.1, preventDefault(){}, dataTransfer: { dropEffect: '' } };
+    const fakeDrop = { target: tgtRow, preventDefault(){}, dataTransfer: { dropEffect: '' } };
+    wbLayerDragId = srcId;
+    wbLayerDragOver(fakeOver);
+    wbLayerDrop(fakeDrop);
+    await new Promise(r => setTimeout(r, 400));
+    const tab = state.ed.tabs[${JSON.stringify(htmlPath)}];
+    const movedEl = doc.querySelector('[data-wf-id="' + srcId + '"]');
+    const tgtEl = doc.querySelector('[data-wf-id="' + tgtId + '"]');
+    const beforeTgt = tgtEl.previousElementSibling === movedEl;
+    return {
+      beforeParent,
+      nowParent: movedEl.parentElement.tagName,
+      beforeTgt,
+      dirty: tab.dirty,
+      layers: document.querySelectorAll('.wb-layer').length,
+    };
+  })()`);
+  log('图层树拖拽：' + JSON.stringify(layerDrag));
+  if (!layerDrag.skip) {
+    assert(layerDrag.nowParent !== layerDrag.beforeParent || layerDrag.beforeTgt, '图层树拖拽改变了元素在 DOM 中的位置');
+    assert(layerDrag.beforeTgt, '源元素被移动到目标元素之前');
+    assert(layerDrag.layers >= 4, '图层树拖拽后结构保持完整');
+    assert(layerDrag.dirty, '图层树拖拽后源码标记未保存');
+  } else {
+    log('  (图层不足 2 个，跳过图层树拖拽断言)');
+  }
+
   // 断点覆盖：在平板断点改 padding，应生成 media query 样式块
   const bp = await run(`(async () => {
     wbSetBp('tablet');

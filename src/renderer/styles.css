@@ -3793,6 +3793,11 @@ pre.preview-md {
 .wb-layer-tag { font-family: var(--mono, monospace); font-size: 11px; opacity: .9; }
 .wb-layer-name { opacity: .7; overflow: hidden; text-overflow: ellipsis; }
 .wb-layer.active .wb-layer-name { opacity: .95; }
+.wb-layer.wb-drop-before { box-shadow: inset 0 2px 0 #FFD700; }
+.wb-layer.wb-drop-after { box-shadow: inset 0 -2px 0 #FFD700; }
+.wb-layer.wb-drop-inside { background: rgba(78,205,196,.18); box-shadow: inset 0 0 0 2px #4ECDC4; }
+.wb-layer[draggable="true"] { cursor: grab; }
+.wb-layer[draggable="true"]:active { cursor: grabbing; }
 
 /* 画布 */
 .wb-canvas-wrap { background: #4a5855; }

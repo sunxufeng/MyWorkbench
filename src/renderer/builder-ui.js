@@ -266,6 +266,9 @@ function wbEl(id) {
 
 /* -------------------------------------------------------------- 画布拖拽 */
 
+/* 画布拖拽：用 Pointer Events + setPointerCapture。
+   关键修复：捕获指针后，拖动过程中即使指针移出 iframe 视口，move/up 事件也持续派发到源元素，
+   不会再出现「按下能选中、但一拖就断、挪不动」的现象（span 等行内元素同样可用）。 */
 function wbInitDrag(doc) {
   if (!doc || !doc.body) return;
   wbDropLine = null;
@@ -273,13 +276,11 @@ function wbInitDrag(doc) {
   wbDraggedId = null;
   wbDragMoved = false;
   wbJustDragged = false;
-  doc.addEventListener('mousedown', wbOnMouseDown, true);
-  doc.addEventListener('mousemove', wbOnMouseMove, true);
-  doc.addEventListener('mouseup', wbOnMouseUp, true);
+  doc.addEventListener('pointerdown', wbOnPointerDown, true);
 }
 
-function wbOnMouseDown(e) {
-  if (e.button !== 0) { wbDragSrc = null; return; }
+function wbOnPointerDown(e) {
+  if (e.pointerType === 'mouse' && e.button !== 0) { wbDragSrc = null; return; }
   const t = e.target.closest && e.target.closest('[data-wf-id]');
   if (!t || t.tagName === 'BODY' || t.getAttribute('contenteditable') === 'true' || t.isContentEditable) {
     wbDragSrc = null;
@@ -292,9 +293,13 @@ function wbOnMouseDown(e) {
   wbDragStartY = e.clientY;
   // 阻止行内元素的文本选择，保证拖拽可靠触发（点选仍由 click 处理）
   try { e.preventDefault(); } catch (_) {}
+  // 关键：捕获指针，拖动时即使指针移出 iframe 也能持续收到 move/up
+  try { t.setPointerCapture(e.pointerId); } catch (_) {}
+  doc.addEventListener('pointermove', wbOnPointerMove, true);
+  doc.addEventListener('pointerup', wbOnPointerUp, true);
 }
 
-function wbOnMouseMove(e) {
+function wbOnPointerMove(e) {
   if (!wbDragSrc) return;
   if (!wbDraggedId) {
     const dx = e.clientX - wbDragStartX;
@@ -309,11 +314,17 @@ function wbOnMouseMove(e) {
   wbShowDropIndicator(drop);
 }
 
-function wbOnMouseUp(e) {
+function wbOnPointerUp(e) {
+  const doc = wbFrame().contentDocument;
   if (wbDragSrc && wbDraggedId && wbDragMoved) {
     const drop = wbComputeDropAt(e.clientX, e.clientY);
     if (drop) wbMoveElement(wbDraggedId, drop);
     wbJustDragged = true;
+  }
+  try { if (wbDragSrc && e.pointerId != null) wbDragSrc.releasePointerCapture(e.pointerId); } catch (_) {}
+  if (doc) {
+    doc.removeEventListener('pointermove', wbOnPointerMove, true);
+    doc.removeEventListener('pointerup', wbOnPointerUp, true);
   }
   wbCleanupDrag();
 }
@@ -482,12 +493,70 @@ function wbHideTag() {
 
 /* -------------------------------------------------------------- Navigator 树 */
 
+/* 图层树在父文档里（非 iframe），原生 HTML5 拖拽稳定可用，作为「挪动元素」的可靠入口。 */
+let wbLayerDragId = null;
+let wbLayerDropRow = null;
+
+function wbIsLayerContainer(row) {
+  const tag = (row && row.dataset.tag || '').toUpperCase();
+  return WB_CONTAINER_TAGS.includes(tag);
+}
+
+function wbLayerDragOver(e) {
+  const tree = document.getElementById('wbLayerTree');
+  if (!tree) return;
+  const row = e.target.closest && e.target.closest('.wb-layer');
+  if (!row || !wbLayerDragId || row.dataset.id === wbLayerDragId) { wbLayerClearDrop(); return; }
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const rect = row.getBoundingClientRect();
+  const ry = e.clientY - rect.top;
+  const h = Math.max(rect.height, 1);
+  let pos = 'after';
+  if (ry < h * 0.3) pos = 'before';
+  else if (ry > h * 0.7) pos = 'after';
+  else if (wbIsLayerContainer(row)) pos = 'inside';
+  else pos = 'after';
+  wbLayerShowDrop(row, pos);
+}
+
+function wbLayerShowDrop(row, pos) {
+  wbLayerClearDrop();
+  wbLayerDropRow = { row, pos };
+  row.classList.add('wb-drop-' + pos);
+}
+
+function wbLayerClearDrop() {
+  document.querySelectorAll('.wb-drop-before,.wb-drop-after,.wb-drop-inside')
+    .forEach((n) => n.classList.remove('wb-drop-before', 'wb-drop-after', 'wb-drop-inside'));
+  wbLayerDropRow = null;
+}
+
+function wbLayerDrop(e) {
+  const row = e.target.closest && e.target.closest('.wb-layer');
+  if (!row || !wbLayerDragId) { wbLayerClearDrop(); return; }
+  e.preventDefault();
+  const pos = wbLayerDropRow ? wbLayerDropRow.pos : 'after';
+  const targetId = row.dataset.id;
+  const src = wbLayerDragId;
+  wbLayerClearDrop();
+  wbLayerDragId = null;
+  if (src && targetId && src !== targetId) {
+    wbMoveElement(src, { targetId, position: pos });
+  }
+}
+
 function wbBuildLayers() {
   const tree = document.getElementById('wbLayerTree');
   if (!tree) return;
   const doc = wbFrame().contentDocument;
   if (!doc) return;
   tree.innerHTML = '';
+  if (!tree._wbDnDBound) {
+    tree.addEventListener('dragover', wbLayerDragOver);
+    tree.addEventListener('drop', wbLayerDrop);
+    tree._wbDnDBound = true;
+  }
   const bs = wbState();
   const walk = (node, depth) => {
     const children = Array.from(node.children).filter((ch) => ch.tagName !== 'SCRIPT' && ch.tagName !== 'STYLE');
@@ -499,12 +568,20 @@ function wbBuildLayers() {
     const name = cls || (node.id ? '#' + node.id : '');
     const row = el('div', 'wb-layer' + (id === bs.selId ? ' active' : '') + (hasKids ? ' has-children' : ''));
     row.dataset.id = id;
+    row.dataset.tag = tag;
     row.style.paddingLeft = 8 + depth * 14 + 'px';
+    row.draggable = true;
     row.innerHTML = `
       <span class="wb-layer-arrow" style="visibility:${hasKids ? 'visible' : 'hidden'}">▾</span>
       <span class="wb-layer-icon">${icon}</span>
       <span class="wb-layer-tag">${esc(tag)}</span>
       <span class="wb-layer-name">${esc(name)}</span>`;
+    row.addEventListener('dragstart', (e) => {
+      wbLayerDragId = id;
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', id); } catch (_) {}
+    });
+    row.addEventListener('dragend', () => { wbLayerDragId = null; wbLayerClearDrop(); });
     row.onclick = (e) => {
       if (e.target.classList.contains('wb-layer-arrow')) {
         e.stopPropagation();
