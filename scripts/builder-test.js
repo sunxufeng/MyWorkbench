@@ -23,7 +23,7 @@ module.exports = async function ({ win, app, shot, errors }) {
   fs.writeFileSync(
     htmlPath,
     '<!DOCTYPE html>\n<html lang="zh-CN"><head><meta charset="UTF-8"><title>示例</title></head>' +
-      '<body><h1>HelloWorld</h1><p>这是一段示例文字。</p></body></html>',
+      '<body><h1>HelloWorld</h1><p>这是一段示例文字。<span>标签</span></p></body></html>',
     'utf8'
   );
   log('测试目录：' + root);
@@ -165,6 +165,29 @@ module.exports = async function ({ win, app, shot, errors }) {
   assert(moved.selId, '移动后 section 仍被选中');
   assert(moved.layers >= 3, '图层树保持完整');
   assert(moved.dirty, '移动后源码仍标记未保存');
+
+  // 行内 span 拖拽：模拟自定义指针拖拽（mousedown→mousemove→mouseup），验证 span 也能移动
+  const spanDrag = await run(`(async () => {
+    const doc = document.getElementById('wbFrame').contentDocument;
+    const span = doc.querySelector('span');
+    const h1 = doc.querySelector('h1');
+    const r = h1.getBoundingClientRect();
+    const W = doc.defaultView;
+    const fire = (type, x, y, tgt) => tgt.dispatchEvent(new W.MouseEvent(type, { bubbles:true, cancelable:true, button:0, clientX:x, clientY:y, view:W }));
+    fire('mousedown', 0, 0, span);
+    fire('mousemove', r.left + 5, r.top + 5, doc.body);
+    fire('mouseup', r.left + 5, r.top + 5, doc.body);
+    await new Promise(r => setTimeout(r, 400));
+    return {
+      spanParent: span.parentElement.tagName,
+      layers: document.querySelectorAll('.wb-layer').length,
+      dirty: state.ed.tabs[${JSON.stringify(htmlPath)}].dirty,
+    };
+  })()`);
+  log('span 拖拽：' + JSON.stringify(spanDrag));
+  assert(spanDrag.spanParent === 'BODY', '行内 span 被拖到 body 子级（移动到 h1 之前）');
+  assert(spanDrag.layers >= 4, '图层树保持完整');
+  assert(spanDrag.dirty, '拖拽后源码仍标记未保存');
 
   // 断点覆盖：在平板断点改 padding，应生成 media query 样式块
   const bp = await run(`(async () => {

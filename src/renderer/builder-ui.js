@@ -27,6 +27,12 @@ const WB_TAG_ICONS = {
 
 let wbDraggedId = null;
 let wbDropLine = null;
+let wbDragSrc = null;
+let wbDragMoved = false;
+let wbDragStartX = 0;
+let wbDragStartY = 0;
+let wbJustDragged = false;
+const WB_DRAG_THRESHOLD = 4;
 
 function wbState() {
   if (!state.ed.builderState) {
@@ -182,7 +188,7 @@ function wbOnFrameReady() {
       background:#4ECDC4; color:#0f2e2b; font:11px/1.4 'JetBrains Mono',monospace;
       padding:2px 6px; border-radius:4px 4px 4px 0; pointer-events:none; white-space:nowrap;
       box-shadow:0 2px 8px rgba(0,0,0,.25); }
-    .wf-dragging{ opacity:.35 !important; pointer-events:none !important; }
+    .wf-dragging{ opacity:.35 !important; }
     .wf-drop-line{ position:absolute; z-index:999999; pointer-events:none;
       background:#FFD700; box-shadow:0 0 0 1px rgba(0,0,0,.15); }
     .wf-drop-line.wf-drop-inside{ background:rgba(78,205,196,.18); border:2px solid #4ECDC4; }
@@ -204,6 +210,7 @@ function wbOnFrameReady() {
   }, true);
 
   doc.addEventListener('click', (e) => {
+    if (wbJustDragged) { wbJustDragged = false; return; }
     const t = e.target.closest && e.target.closest('[data-wf-id]');
     if (t) {
       e.preventDefault();
@@ -262,53 +269,52 @@ function wbEl(id) {
 function wbInitDrag(doc) {
   if (!doc || !doc.body) return;
   wbDropLine = null;
-  doc.querySelectorAll('[data-wf-id]').forEach((n) => {
-    if (n.tagName !== 'BODY') n.setAttribute('draggable', 'true');
-  });
-  doc.addEventListener('dragstart', wbOnDragStart, true);
-  doc.addEventListener('dragover', wbOnDragOver, true);
-  doc.addEventListener('dragleave', wbOnDragLeave, true);
-  doc.addEventListener('drop', wbOnDrop, true);
-  doc.addEventListener('dragend', wbOnDragEnd, true);
+  wbDragSrc = null;
+  wbDraggedId = null;
+  wbDragMoved = false;
+  wbJustDragged = false;
+  doc.addEventListener('mousedown', wbOnMouseDown, true);
+  doc.addEventListener('mousemove', wbOnMouseMove, true);
+  doc.addEventListener('mouseup', wbOnMouseUp, true);
 }
 
-function wbOnDragStart(e) {
+function wbOnMouseDown(e) {
+  if (e.button !== 0) { wbDragSrc = null; return; }
   const t = e.target.closest && e.target.closest('[data-wf-id]');
   if (!t || t.tagName === 'BODY' || t.getAttribute('contenteditable') === 'true' || t.isContentEditable) {
-    e.preventDefault();
+    wbDragSrc = null;
     return;
   }
-  wbDraggedId = t.getAttribute('data-wf-id');
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/wf-id', wbDraggedId);
-  t.classList.add('wf-dragging');
-  wbHideTag();
+  wbDragSrc = t;
+  wbDraggedId = null;
+  wbDragMoved = false;
+  wbDragStartX = e.clientX;
+  wbDragStartY = e.clientY;
+  // 阻止行内元素的文本选择，保证拖拽可靠触发（点选仍由 click 处理）
+  try { e.preventDefault(); } catch (_) {}
 }
 
-function wbOnDragOver(e) {
-  e.preventDefault();
-  const t = e.target.closest && e.target.closest('[data-wf-id]');
-  if (!t) { wbHideDropIndicator(); return; }
-  const drop = wbComputeDrop(e, t);
+function wbOnMouseMove(e) {
+  if (!wbDragSrc) return;
+  if (!wbDraggedId) {
+    const dx = e.clientX - wbDragStartX;
+    const dy = e.clientY - wbDragStartY;
+    if (Math.abs(dx) < WB_DRAG_THRESHOLD && Math.abs(dy) < WB_DRAG_THRESHOLD) return;
+    wbDraggedId = wbDragSrc.getAttribute('data-wf-id');
+    wbDragMoved = true;
+    wbDragSrc.classList.add('wf-dragging');
+    wbHideTag();
+  }
+  const drop = wbComputeDropAt(e.clientX, e.clientY);
   wbShowDropIndicator(drop);
 }
 
-function wbOnDragLeave(e) {
-  // 只有真正离开 iframe 文档时才隐藏（relatedTarget 为空）
-  if (!e.relatedTarget) wbHideDropIndicator();
-}
-
-function wbOnDrop(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  const t = e.target.closest && e.target.closest('[data-wf-id]');
-  if (!t || !wbDraggedId) { wbCleanupDrag(); return; }
-  const drop = wbComputeDrop(e, t);
-  if (drop) wbMoveElement(wbDraggedId, drop);
-  wbCleanupDrag();
-}
-
-function wbOnDragEnd(e) {
+function wbOnMouseUp(e) {
+  if (wbDragSrc && wbDraggedId && wbDragMoved) {
+    const drop = wbComputeDropAt(e.clientX, e.clientY);
+    if (drop) wbMoveElement(wbDraggedId, drop);
+    wbJustDragged = true;
+  }
   wbCleanupDrag();
 }
 
@@ -316,21 +322,27 @@ function wbCleanupDrag() {
   const doc = wbFrame().contentDocument;
   if (doc) doc.querySelectorAll('.wf-dragging').forEach((n) => n.classList.remove('wf-dragging'));
   wbHideDropIndicator();
+  wbDragSrc = null;
   wbDraggedId = null;
+  wbDragMoved = false;
 }
 
-function wbComputeDrop(e, target) {
+function wbComputeDropAt(x, y) {
+  const doc = wbFrame().contentDocument;
   const dragged = wbDraggedId ? wbEl(wbDraggedId) : null;
-  if (!dragged || !target || target === dragged || dragged.contains(target)) return null;
+  if (!doc || !dragged) return null;
+  const node = doc.elementFromPoint(x, y);
+  const target = node && node.closest ? node.closest('[data-wf-id]') : null;
+  if (!target || target === dragged || dragged.contains(target)) return null;
   const rect = target.getBoundingClientRect();
-  const y = e.clientY - rect.top;
+  const ry = y - rect.top;
   const h = Math.max(rect.height, 1);
   let position = 'after';
   if (target.tagName === 'BODY') {
     position = 'inside';
-  } else if (y < h * 0.25) {
+  } else if (ry < h * 0.25) {
     position = 'before';
-  } else if (y > h * 0.75) {
+  } else if (ry > h * 0.75) {
     position = 'after';
   } else if (wbIsContainer(target)) {
     position = 'inside';
