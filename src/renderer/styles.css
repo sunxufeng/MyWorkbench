@@ -3693,7 +3693,7 @@ pre.preview-md {
 .ed-visual p { margin: 0.5em 0; }
 
 /* CodeMirror 在编辑器中的样式 */
-.ed-cm .CodeMirror {
+.ed-cm.CodeMirror {
   height: 100% !important;
   font-family: var(--mono, 'JetBrains Mono', ui-monospace, monospace) !important;
   font-size: 13px !important;
