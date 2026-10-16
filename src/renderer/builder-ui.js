@@ -25,6 +25,9 @@ const WB_TAG_ICONS = {
   table: '▦', tr: '▦', td: '▦',
 };
 
+let wbDraggedId = null;
+let wbDropLine = null;
+
 function wbState() {
   if (!state.ed.builderState) {
     state.ed.builderState = {
@@ -179,6 +182,10 @@ function wbOnFrameReady() {
       background:#4ECDC4; color:#0f2e2b; font:11px/1.4 'JetBrains Mono',monospace;
       padding:2px 6px; border-radius:4px 4px 4px 0; pointer-events:none; white-space:nowrap;
       box-shadow:0 2px 8px rgba(0,0,0,.25); }
+    .wf-dragging{ opacity:.35 !important; pointer-events:none !important; }
+    .wf-drop-line{ position:absolute; z-index:999999; pointer-events:none;
+      background:#FFD700; box-shadow:0 0 0 1px rgba(0,0,0,.15); }
+    .wf-drop-line.wf-drop-inside{ background:rgba(78,205,196,.18); border:2px solid #4ECDC4; }
   `;
   doc.head.appendChild(hs);
 
@@ -210,6 +217,8 @@ function wbOnFrameReady() {
     if (t && WB_TEXT_TAGS.includes(t.tagName)) {
       e.preventDefault();
       t.setAttribute('contenteditable', 'true');
+      const oldDraggable = t.getAttribute('draggable');
+      t.setAttribute('draggable', 'false');
       t.focus();
       const range = doc.createRange();
       range.selectNodeContents(t);
@@ -218,6 +227,8 @@ function wbOnFrameReady() {
       sel.addRange(range);
       const finish = () => {
         t.removeAttribute('contenteditable');
+        if (oldDraggable === null) t.removeAttribute('draggable');
+        else t.setAttribute('draggable', oldDraggable);
         t.removeEventListener('blur', finish);
         wbSerializeSoon();
       };
@@ -228,6 +239,7 @@ function wbOnFrameReady() {
   wbRenumber();
   wbBuildLayers();
   wbUpdateCanvasInfo();
+  wbInitDrag(doc);
 }
 
 function wbRenumber() {
@@ -243,6 +255,140 @@ function wbRenumber() {
 function wbEl(id) {
   const doc = wbFrame().contentDocument;
   return doc ? doc.querySelector(`[data-wf-id="${id}"]`) : null;
+}
+
+/* -------------------------------------------------------------- 画布拖拽 */
+
+function wbInitDrag(doc) {
+  if (!doc || !doc.body) return;
+  wbDropLine = null;
+  doc.querySelectorAll('[data-wf-id]').forEach((n) => {
+    if (n.tagName !== 'BODY') n.setAttribute('draggable', 'true');
+  });
+  doc.addEventListener('dragstart', wbOnDragStart, true);
+  doc.addEventListener('dragover', wbOnDragOver, true);
+  doc.addEventListener('dragleave', wbOnDragLeave, true);
+  doc.addEventListener('drop', wbOnDrop, true);
+  doc.addEventListener('dragend', wbOnDragEnd, true);
+}
+
+function wbOnDragStart(e) {
+  const t = e.target.closest && e.target.closest('[data-wf-id]');
+  if (!t || t.tagName === 'BODY' || t.getAttribute('contenteditable') === 'true' || t.isContentEditable) {
+    e.preventDefault();
+    return;
+  }
+  wbDraggedId = t.getAttribute('data-wf-id');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/wf-id', wbDraggedId);
+  t.classList.add('wf-dragging');
+  wbHideTag();
+}
+
+function wbOnDragOver(e) {
+  e.preventDefault();
+  const t = e.target.closest && e.target.closest('[data-wf-id]');
+  if (!t) { wbHideDropIndicator(); return; }
+  const drop = wbComputeDrop(e, t);
+  wbShowDropIndicator(drop);
+}
+
+function wbOnDragLeave(e) {
+  // 只有真正离开 iframe 文档时才隐藏（relatedTarget 为空）
+  if (!e.relatedTarget) wbHideDropIndicator();
+}
+
+function wbOnDrop(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const t = e.target.closest && e.target.closest('[data-wf-id]');
+  if (!t || !wbDraggedId) { wbCleanupDrag(); return; }
+  const drop = wbComputeDrop(e, t);
+  if (drop) wbMoveElement(wbDraggedId, drop);
+  wbCleanupDrag();
+}
+
+function wbOnDragEnd(e) {
+  wbCleanupDrag();
+}
+
+function wbCleanupDrag() {
+  const doc = wbFrame().contentDocument;
+  if (doc) doc.querySelectorAll('.wf-dragging').forEach((n) => n.classList.remove('wf-dragging'));
+  wbHideDropIndicator();
+  wbDraggedId = null;
+}
+
+function wbComputeDrop(e, target) {
+  const dragged = wbDraggedId ? wbEl(wbDraggedId) : null;
+  if (!dragged || !target || target === dragged || dragged.contains(target)) return null;
+  const rect = target.getBoundingClientRect();
+  const y = e.clientY - rect.top;
+  const h = Math.max(rect.height, 1);
+  let position = 'after';
+  if (target.tagName === 'BODY') {
+    position = 'inside';
+  } else if (y < h * 0.25) {
+    position = 'before';
+  } else if (y > h * 0.75) {
+    position = 'after';
+  } else if (wbIsContainer(target)) {
+    position = 'inside';
+  }
+  return { targetId: target.getAttribute('data-wf-id'), position, target };
+}
+
+function wbShowDropIndicator(drop) {
+  const doc = wbFrame().contentDocument;
+  if (!doc || !drop || !drop.target) return;
+  if (!wbDropLine || !wbDropLine.parentNode) {
+    wbDropLine = doc.createElement('div');
+    wbDropLine.className = 'wf-drop-line';
+    doc.body.appendChild(wbDropLine);
+  }
+  wbDropLine.classList.remove('wf-drop-inside');
+  const rect = drop.target.getBoundingClientRect();
+  const sx = doc.documentElement.scrollLeft || doc.body.scrollLeft || 0;
+  const sy = doc.documentElement.scrollTop || doc.body.scrollTop || 0;
+  wbDropLine.style.left = (rect.left + sx) + 'px';
+  wbDropLine.style.width = rect.width + 'px';
+  wbDropLine.style.height = '2px';
+  wbDropLine.style.border = 'none';
+  wbDropLine.style.background = '#FFD700';
+  if (drop.position === 'before') {
+    wbDropLine.style.top = (rect.top + sy) + 'px';
+  } else if (drop.position === 'after') {
+    wbDropLine.style.top = (rect.bottom + sy - 2) + 'px';
+  } else {
+    wbDropLine.classList.add('wf-drop-inside');
+    wbDropLine.style.top = (rect.top + sy) + 'px';
+    wbDropLine.style.height = rect.height + 'px';
+    wbDropLine.style.background = 'rgba(78,205,196,.18)';
+  }
+}
+
+function wbHideDropIndicator() {
+  if (wbDropLine && wbDropLine.parentNode) wbDropLine.remove();
+  wbDropLine = null;
+}
+
+function wbMoveElement(srcId, drop) {
+  const src = wbEl(srcId);
+  const target = wbEl(drop.targetId);
+  if (!src || !target) return;
+  if (drop.position === 'inside' && (src === target || src.contains(target))) drop.position = 'after';
+  if (drop.position === 'before') {
+    target.parentNode.insertBefore(src, target);
+  } else if (drop.position === 'after') {
+    target.parentNode.insertBefore(src, target.nextSibling);
+  } else if (drop.position === 'inside') {
+    target.appendChild(src);
+  }
+  wbRenumber();
+  wbBuildLayers();
+  wbSelect(src.getAttribute('data-wf-id'));
+  wbSerializeSoon();
+  toast('已移动元素', 'ok');
 }
 
 /* -------------------------------------------------------------- 断点 */

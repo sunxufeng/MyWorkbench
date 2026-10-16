@@ -145,6 +145,27 @@ module.exports = async function ({ win, app, shot, errors }) {
   assert(styled.contentHas, '颜色已回写进源码');
   assert(styled.contentHasSize, '字号已回写进源码');
 
+  // 拖拽移动：把 section 拖到 h1 前面，验证 DOM 顺序与序列化
+  const moved = await run(`(async () => {
+    const doc = document.getElementById('wbFrame').contentDocument;
+    const sec = doc.querySelector('section');
+    const h1 = doc.querySelector('h1');
+    wbMoveElement(sec.getAttribute('data-wf-id'), { targetId: h1.getAttribute('data-wf-id'), position: 'before' });
+    await new Promise(r => setTimeout(r, 400));
+    const tab = state.ed.tabs[${JSON.stringify(htmlPath)}];
+    return {
+      sectionFirst: doc.body.firstElementChild.tagName === 'SECTION',
+      selId: state.ed.builderState.selId,
+      layers: document.querySelectorAll('.wb-layer').length,
+      dirty: tab.dirty,
+    };
+  })()`);
+  log('拖拽移动：' + JSON.stringify(moved));
+  assert(moved.sectionFirst, 'section 被移动到 body 第一个子元素');
+  assert(moved.selId, '移动后 section 仍被选中');
+  assert(moved.layers >= 3, '图层树保持完整');
+  assert(moved.dirty, '移动后源码仍标记未保存');
+
   // 断点覆盖：在平板断点改 padding，应生成 media query 样式块
   const bp = await run(`(async () => {
     wbSetBp('tablet');
