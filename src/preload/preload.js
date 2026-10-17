@@ -97,6 +97,22 @@ contextBridge.exposeInMainWorld('api', {
     write: (filePath, content) => invoke('editor:write', filePath, content),
   },
 
+  // 本地电子书库（对标 Calibre）
+  ebooks: {
+    import: (paths) => invoke('ebooks:import', paths),
+    list: () => invoke('ebooks:list'),
+    get: (id) => invoke('ebooks:get', id),
+    meta: (id, patch) => invoke('ebooks:meta', id, patch),
+    delete: (id) => invoke('ebooks:delete', id),
+    progress: (id, progress) => invoke('ebooks:progress', id, progress),
+    chapter: (id, href) => invoke('ebooks:chapter', id, href),
+    txt: (id) => invoke('ebooks:txt', id),
+    exportTxt: (id) => invoke('ebooks:export-txt', id),
+    calibre: () => invoke('ebooks:calibre'),
+    convert: (id, to) => invoke('ebooks:convert', id, to),
+    open: (id) => invoke('ebooks:open', id),
+  },
+
   // 拖拽进来的 File 对象 → 真实磁盘路径（Electron 32+ 不再有 File.path）
   pathForFile: (file) => {
     try {

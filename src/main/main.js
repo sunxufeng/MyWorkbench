@@ -29,6 +29,7 @@ const { FeishuClient } = require('./feishu');
 const { pullFromFeishu, pushToFeishu } = require('./sync');
 const weather = require('./weather');
 const weread = require('./weread');
+const { EbookService } = require('./ebooks');
 const {
   occurrencesOn,
   occurrencesInRange,
@@ -54,6 +55,8 @@ let win = null;
 let store = null;
 /** @type {LibraryService|null} */
 let lib = null;
+/** @type {EbookService|null} */
+let ebookSvc = null;
 /** @type {FeishuClient|null} */
 let feishu = null;
 /** 这次启动是否把旧版「人生档案馆」目录改名迁移过来了 */
@@ -93,6 +96,8 @@ async function initStore() {
   migratedFrom = resolved.migratedFrom || null;
   store = new ArchiveStore(resolved.libraryPath);
   await store.load();
+  ebookSvc = new EbookService(store.libraryPath);
+  await ebookSvc.ensureBooksDir();
   return store;
 }
 
@@ -347,6 +352,20 @@ function registerIpc() {
     return await weread.readChapter(cookie, bookId, chapterUid);
   });
 
+  // ---- 本地电子书库（对标 Calibre 的本地化核心能力）----
+  handle('ebooks:import', async (paths) => ebookSvc.importBooks(paths || []));
+  handle('ebooks:list', async () => ebookSvc.list());
+  handle('ebooks:get', async (id) => ebookSvc.get(id));
+  handle('ebooks:meta', async (id, patch) => ebookSvc.updateMeta(id, patch));
+  handle('ebooks:delete', async (id) => ebookSvc.deleteBook(id));
+  handle('ebooks:progress', async (id, progress) => ebookSvc.setProgress(id, progress));
+  handle('ebooks:chapter', async (id, href) => ebookSvc.readChapter(id, href));
+  handle('ebooks:txt', async (id) => ebookSvc.readTxt(id));
+  handle('ebooks:export-txt', async (id) => ebookSvc.exportTxt(id));
+  handle('ebooks:calibre', async () => ({ available: await ebookSvc.calibreAvailable() }));
+  handle('ebooks:convert', async (id, to) => ebookSvc.convertBook(id, to));
+  handle('ebooks:open', async (id) => ebookSvc.openInSystem(id));
+
   // ---- 文件编辑器 ----
   handle('editor:open-folder', async () => {
     if (!win) return { canceled: true };
@@ -600,7 +619,9 @@ function registerIpc() {
     const filters =
       kind === 'image'
         ? [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tif', 'tiff', 'heic', 'svg'] }]
-        : [{ name: '所有文件', extensions: ['*'] }];
+        : kind === 'ebook'
+          ? [{ name: '电子书', extensions: ['epub', 'pdf', 'txt', 'mobi', 'azw', 'azw3', 'fb2', 'docx', 'rtf', 'html', 'lit'] }]
+          : [{ name: '所有文件', extensions: ['*'] }];
     const res = await dialog.showOpenDialog(win, {
       title: kind === 'image' ? '选择图片' : '选择文件',
       properties: ['openFile', 'multiSelections'],

@@ -244,8 +244,18 @@ function openModal({ title, subtitle, body, footer, wide, dismissable = true }) 
   modal.appendChild(bodyEl);
   if (footer) {
     const foot = el('div', 'modal-foot');
-    if (typeof footer === 'string') foot.innerHTML = footer;
-    else foot.appendChild(footer);
+    if (typeof footer === 'string') {
+      foot.innerHTML = footer;
+    } else if (Array.isArray(footer)) {
+      // 支持 footer: [{ label, primary, danger, onclick }]，onclick(close) 由调用方决定是否关闭
+      for (const b of footer) {
+        const btn = el('button', 'tb' + (b.primary ? ' primary' : '') + (b.danger ? ' danger' : ''), b.label);
+        btn.onclick = () => { if (typeof b.onclick === 'function') b.onclick(closeModal); else closeModal(); };
+        foot.appendChild(btn);
+      }
+    } else {
+      foot.appendChild(footer);
+    }
     modal.appendChild(foot);
   }
   overlay.appendChild(modal);
@@ -438,6 +448,7 @@ function renderSidebar() {
   const todayN = todayOccurrences().length;
   mk('overview', '◧', '总览', '', '');
   mk('weread', '📚', '微信读书', '', '');
+  mk('ebooks', '📖', '书库', '', '');
   mk('editor', '💻', '文件编辑器', '', '');
   mk('calendar', '▦', '日历', todayN ? `${todayN} 今日` : '', '');
   mk('all', '▤', '全部资料', st.total);
@@ -616,17 +627,19 @@ function setPaneMode() {
   const ov = state.view === 'overview';
   const wr = state.view === 'weread';
   const ed = state.view === 'editor';
+  const eb = state.view === 'ebooks';
   const app = $('#app');
   if (app) {
     app.classList.toggle('cal-mode', cal);
     app.classList.toggle('ov-mode', ov);
     app.classList.toggle('wr-mode', wr);
     app.classList.toggle('ed-mode', ed);
+    app.classList.toggle('eb-mode', eb);
   }
   const head = $('#calHead');
   if (head) head.classList.toggle('hidden', !cal);
   const lh = $('#listHead');
-  if (lh) lh.classList.toggle('hidden', cal || ov || wr || ed);
+  if (lh) lh.classList.toggle('hidden', cal || ov || wr || ed || eb);
   const sb = $('#listScroll');
   if (sb) sb.classList.toggle('cal-scroll', cal);
   const si = $('#searchInput');
@@ -643,6 +656,11 @@ function renderList() {
   setPaneMode();
   if (state.view === 'calendar') return renderCalendar();
   if (state.view === 'weread') return renderWereadList();
+  if (state.view === 'ebooks') {
+    renderEbooksLibrary();
+    ebLoadBooks().then(() => { if (state.view === 'ebooks') { renderEbooksLibrary(); renderEbooksDetail(); } });
+    return;
+  }
   if (state.view === 'editor') return renderEditorList();
 
   const list = currentList();
@@ -2161,6 +2179,7 @@ function renderDetail() {
   }
   if (state.view === 'calendar') return renderCalendarDetail();
   if (state.view === 'weread') return renderWereadDetail();
+  if (state.view === 'ebooks') return renderEbooksDetail();
   if (state.view === 'editor') return renderEditorDetail();
   if (state.editing) return renderEditor();
   const e = state.entries.find((x) => x.id === state.selectedId);
