@@ -365,6 +365,13 @@ function registerIpc() {
   handle('ebooks:calibre', async () => ({ available: await ebookSvc.calibreAvailable() }));
   handle('ebooks:convert', async (id, to) => ebookSvc.convertBook(id, to));
   handle('ebooks:open', async (id) => ebookSvc.openInSystem(id));
+  handle('ebooks:pref-get', async () => ({ prefs: ebookSvc.getAllPrefs() }));
+  handle('ebooks:pref-set', async (patch) => {
+    if (patch && typeof patch === 'object') {
+      for (const k of Object.keys(patch)) await ebookSvc.setPref(k, patch[k]);
+    }
+    return { prefs: ebookSvc.getAllPrefs() };
+  });
   handle('ebooks:bookmark', async (id, action, payload) => {
     if (action === 'add') return ebookSvc.addBookmark(id, payload || {});
     if (action === 'delete') return ebookSvc.deleteBookmark(id, payload);

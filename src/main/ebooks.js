@@ -233,12 +233,15 @@ class EbookService {
     this.libraryPath = libraryPath;
     this.booksDir = path.join(libraryPath, 'books');
     this.booksFile = path.join(libraryPath, BOOKS_FILE);
+    this.prefsFile = path.join(libraryPath, 'ebooks-prefs.json');
     this.data = { books: [] };
+    this.prefs = {};
   }
 
   async ensureBooksDir() {
     await fsp.mkdir(this.booksDir, { recursive: true });
     await this.load();
+    await this.loadPrefs();
   }
 
   async load() {
@@ -254,6 +257,31 @@ class EbookService {
 
   async save() {
     await fsp.writeFile(this.booksFile, JSON.stringify(this.data, null, 2), 'utf8');
+  }
+
+  /* ---- 偏好（视图模式等，与 books.json 解耦） ---- */
+  async loadPrefs() {
+    try {
+      const txt = await fsp.readFile(this.prefsFile, 'utf8');
+      const j = JSON.parse(txt);
+      this.prefs = j && typeof j === 'object' ? j : {};
+    } catch {
+      this.prefs = {};
+    }
+  }
+
+  async savePrefs() {
+    await fsp.writeFile(this.prefsFile, JSON.stringify(this.prefs, null, 2), 'utf8');
+  }
+
+  getAllPrefs() {
+    return Object.assign({}, this.prefs);
+  }
+
+  async setPref(key, val) {
+    this.prefs[key] = val;
+    await this.savePrefs();
+    return this.getAllPrefs();
   }
 
   list() {

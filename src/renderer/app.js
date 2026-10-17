@@ -658,7 +658,11 @@ function renderList() {
   if (state.view === 'weread') return renderWereadList();
   if (state.view === 'ebooks') {
     renderEbooksLibrary();
-    ebLoadBooks().then(() => { if (state.view === 'ebooks') { renderEbooksLibrary(); renderEbooksDetail(); } });
+    ebLoadBooks().then(() =>
+      ebLoadPrefs().then(() => {
+        if (state.view === 'ebooks') { renderEbooksLibrary(); renderEbooksDetail(); }
+      })
+    );
     return;
   }
   if (state.view === 'editor') return renderEditorList();

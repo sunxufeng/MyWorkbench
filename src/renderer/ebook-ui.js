@@ -6,10 +6,16 @@
    ========================================================================== */
 
 if (!state.eb) {
-  state.eb = { books: [], q: '', selId: null, reader: null, loading: false };
+  state.eb = { books: [], q: '', selId: null, reader: null, loading: false, viewMode: null };
 }
 
 const EB_READABLE = ['epub', 'pdf', 'txt'];
+
+const EB_VIEWS = [
+  { mode: 'list', ico: '☰', label: '列表' },
+  { mode: 'grid', ico: '▦', label: '紧凑封面' },
+  { mode: 'cover', ico: '▣', label: '大封面' },
+];
 
 function ebArchive(url) {
   // 注意：archive:// 是自定义 scheme，WHATWG 会把 archive://books/... 的 books 当成 host（authority）吞掉一层，
@@ -26,7 +32,7 @@ function renderEbooksLibrary() {
   scroll.innerHTML = '';
   scroll.classList.add('eb-scroll');
 
-  // 工具条
+  // 工具条：导入 + 搜索 + 视图切换
   const bar = el('div', 'eb-bar');
   const importBtn = el('button', 'tb primary', '＋ 导入书籍');
   importBtn.onclick = ebImport;
@@ -35,18 +41,51 @@ function renderEbooksLibrary() {
   search.value = state.eb.q || '';
   search.oninput = () => {
     state.eb.q = search.value.trim();
-    ebRenderGrid(grid);
+    ebRenderGrid(document.querySelector('.eb-grid'));
   };
   bar.appendChild(importBtn);
   bar.appendChild(search);
+  const toggle = el('div', 'eb-view-toggle');
+  EB_VIEWS.forEach((v) => {
+    const vb = el('button', 'eb-view-btn' + (state.eb.viewMode === v.mode ? ' active' : ''));
+    vb.textContent = v.ico;
+    vb.title = v.label;
+    vb.onclick = () => ebSetViewMode(v.mode);
+    toggle.appendChild(vb);
+  });
+  bar.appendChild(toggle);
   scroll.appendChild(bar);
 
-  const grid = el('div', 'eb-grid');
+  const grid = el('div', 'eb-grid eb-mode-' + (state.eb.viewMode || 'list'));
   scroll.appendChild(grid);
   ebRenderGrid(grid);
 }
 
+async function ebSetViewMode(mode) {
+  if (state.eb.viewMode === mode) return;
+  state.eb.viewMode = mode;
+  try { await act(API.ebooks.prefSet({ viewMode: mode })); } catch (e) { /* 忽略持久化失败 */ }
+  // 更新切换器高亮
+  const btns = document.querySelectorAll('.eb-view-btn');
+  EB_VIEWS.forEach((v, i) => {
+    if (btns[i]) btns[i].classList.toggle('active', v.mode === mode);
+  });
+  ebRenderGrid(document.querySelector('.eb-grid'));
+}
+
+async function ebLoadPrefs() {
+  try {
+    const r = await act(API.ebooks.prefGet());
+    state.eb.viewMode = (r && r.prefs && r.prefs.viewMode) || 'list';
+  } catch (e) {
+    state.eb.viewMode = 'list';
+  }
+}
+
 function ebRenderGrid(grid) {
+  if (!grid) return;
+  const mode = state.eb.viewMode || 'list';
+  grid.className = 'eb-grid eb-mode-' + mode;
   const q = (state.eb.q || '').toLowerCase();
   const books = (state.eb.books || []).filter((b) => {
     if (!q) return true;
@@ -69,7 +108,74 @@ function ebRenderGrid(grid) {
     grid.appendChild(el('div', 'eb-empty', '没有匹配的书。'));
     return;
   }
-  for (const b of books) grid.appendChild(ebCard(b));
+  for (const b of books) {
+    if (mode === 'list') grid.appendChild(ebRow(b));
+    else if (mode === 'grid') grid.appendChild(ebCompact(b));
+    else grid.appendChild(ebCard(b));
+  }
+}
+
+/* 列表视图：一行一本书，最省空间 */
+function ebRow(b) {
+  const row = el('div', 'eb-row' + (state.eb.selId === b.id ? ' sel' : ''));
+  const cover = el('div', 'eb-row-cover');
+  if (b.cover) {
+    const img = el('img', 'eb-cover-img');
+    img.loading = 'lazy';
+    img.alt = '';
+    img.src = ebArchive(b.cover);
+    img.onerror = () => { cover.classList.add('eb-cover-fallback'); cover.textContent = (b.title || '?').slice(0, 1); };
+    cover.appendChild(img);
+  } else {
+    cover.classList.add('eb-cover-fallback');
+    cover.textContent = (b.title || '?').slice(0, 1);
+  }
+  row.appendChild(cover);
+
+  const info = el('div', 'eb-row-info');
+  info.appendChild(el('div', 'eb-row-title', b.title || '(无标题)'));
+  info.appendChild(el('div', 'eb-row-author', (b.authors || []).join('、') || '未知作者'));
+  const meta = el('div', 'eb-row-meta');
+  meta.appendChild(el('span', 'eb-badge', (b.format || '?').toUpperCase()));
+  if (b.sizeLabel) meta.appendChild(el('span', 'eb-tag', b.sizeLabel));
+  if (b.progress && b.progress.percent > 0) meta.appendChild(el('span', 'eb-tag', '已读 ' + Math.min(100, Math.round(b.progress.percent)) + '%'));
+  info.appendChild(meta);
+  row.appendChild(info);
+
+  if (b.progress && b.progress.percent > 0) {
+    const pb = el('div', 'eb-row-progress');
+    const fill = el('div', 'eb-progress-fill');
+    fill.style.width = Math.min(100, Math.round(b.progress.percent)) + '%';
+    pb.appendChild(fill);
+    row.appendChild(pb);
+  }
+
+  row.onclick = () => ebOpenBook(b.id);
+  return row;
+}
+
+/* 紧凑封面：小封面 + 标题 + 格式角标 */
+function ebCompact(b) {
+  const c = el('div', 'eb-compact');
+  const cover = el('div', 'eb-compact-cover');
+  if (b.cover) {
+    const img = el('img', 'eb-cover-img');
+    img.loading = 'lazy';
+    img.alt = '';
+    img.src = ebArchive(b.cover);
+    img.onerror = () => { cover.classList.add('eb-cover-fallback'); cover.textContent = (b.title || '?').slice(0, 1); };
+    cover.appendChild(img);
+  } else {
+    cover.classList.add('eb-cover-fallback');
+    cover.textContent = (b.title || '?').slice(0, 1);
+  }
+  // 格式角标
+  const badge = el('span', 'eb-compact-badge', (b.format || '?').toUpperCase());
+  cover.appendChild(badge);
+  c.appendChild(cover);
+  c.appendChild(el('div', 'eb-compact-title', (b.title || '(无标题)')));
+  c.onclick = () => ebOpenBook(b.id);
+  return c;
 }
 
 function ebCard(b) {
