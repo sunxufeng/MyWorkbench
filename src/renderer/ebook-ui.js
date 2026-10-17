@@ -295,6 +295,7 @@ async function ebStartRead(book, jumpHref) {
     id: book.id,
     format: fmt,
     title: book.title,
+    fileName: book.fileName || '',
     spine: (book.meta && book.meta.spine) || [],
     toc: (book.meta && book.meta.toc) || [],
     bookmarks: (book.bookmarks || []),
@@ -330,7 +331,7 @@ function ebRenderEpub(detail, reader) {
   // 顶栏
   const top = el('div', 'eb-reader-top');
   const back = el('button', 'tb', '← 书库');
-  back.onclick = () => { state.eb.reader = null; renderEbooksDetail(); renderEbooksLibrary(); };
+  back.onclick = () => { state.eb.reader = null; state.eb.selId = null; renderEbooksDetail(); renderEbooksLibrary(); };
   top.appendChild(back);
   const title = el('div', 'eb-reader-title', reader.title || '');
   top.appendChild(title);
@@ -627,14 +628,19 @@ async function ebEpubLoad(detail, reader, index) {
 /* ---------- PDF 阅读器（Chromium 内置 PDF 视图） ---------- */
 function ebRenderPdf(detail, reader) {
   const book = state.eb.books.find((b) => b.id === reader.id);
+  const fileName = reader.fileName || (book && book.fileName) || '';
   const wrap = el('div', 'eb-reader');
   const top = el('div', 'eb-reader-top');
   const back = el('button', 'tb', '← 书库');
-  back.onclick = () => { state.eb.reader = null; renderEbooksDetail(); renderEbooksLibrary(); };
+  back.onclick = () => { state.eb.reader = null; state.eb.selId = null; renderEbooksDetail(); renderEbooksLibrary(); };
   top.appendChild(back);
   top.appendChild(el('div', 'eb-reader-title', reader.title || ''));
-  const ext = book ? book.fileName : '';
-  const src = ebArchive(`books/${reader.id}/${ext}`);
+  if (!fileName) {
+    detail.appendChild(el('div', 'eb-empty', '无法打开：缺少文件名（请重新导入）'));
+    toast('无法打开书籍：数据不完整，请重新导入', 'err');
+    return;
+  }
+  const src = ebArchive(`books/${reader.id}/${fileName}`);
   top.appendChild(el('div', 'eb-reader-progress-label', 'PDF（用内置视图阅读，进度不跨设备同步）'));
   wrap.appendChild(top);
   const frame = el('iframe', 'eb-reader-frame');
@@ -649,7 +655,7 @@ function ebRenderTxt(detail, reader) {
   const wrap = el('div', 'eb-reader');
   const top = el('div', 'eb-reader-top');
   const back = el('button', 'tb', '← 书库');
-  back.onclick = () => { state.eb.reader = null; renderEbooksDetail(); renderEbooksLibrary(); };
+  back.onclick = () => { state.eb.reader = null; state.eb.selId = null; renderEbooksDetail(); renderEbooksLibrary(); };
   top.appendChild(back);
   top.appendChild(el('div', 'eb-reader-title', reader.title || ''));
   const small = el('button', 'tb', 'A−');
