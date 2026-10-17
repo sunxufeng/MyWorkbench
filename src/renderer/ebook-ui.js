@@ -122,11 +122,15 @@ async function ebImport() {
   toast('正在导入…', 'ok');
   try {
     const res = await act(API.ebooks.import(r.paths));
-    const ok = (res || []).filter((x) => x && x.ok).length;
-    const fail = (res || []).filter((x) => x && !x.ok);
     await ebLoadBooks();
+    renderEbooksLibrary(); // 导入后重绘网格（否则界面看不到新导入的书）
+    if (res == null) return; // 整批 IPC 失败：act 已提示
+    const ok = res.filter((x) => x && x.ok).length;
+    const fail = res.filter((x) => x && !x.ok);
     if (ok) toast(`已导入 ${ok} 本${fail.length ? `，${fail.length} 本失败` : ''}`, 'ok');
     else toast('导入失败：' + ((fail[0] && fail[0].error) || '未知错误'), 'err');
+  } catch (e) {
+    toast('导入出错：' + (e.message || e), 'err');
   } finally {
     state.eb.loading = false;
   }
