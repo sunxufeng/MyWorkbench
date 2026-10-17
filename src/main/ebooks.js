@@ -312,6 +312,7 @@ class EbookService {
       tags: [],
       progress: { href: '', percent: 0, updatedAt: '' },
       meta: {},
+      bookmarks: [],
     };
 
     if (ext === 'epub') {
@@ -511,6 +512,83 @@ class EbookService {
     const { shell } = require('electron');
     shell.openPath(abs);
     return { ok: true };
+  }
+
+  /* ----------------------------- 书签 ----------------------------- */
+
+  async addBookmark(id, payload = {}) {
+    const b = this.get(id);
+    if (!b) return { ok: false, error: '未找到书籍' };
+    if (!Array.isArray(b.bookmarks)) b.bookmarks = [];
+    const bm = {
+      id: uid('bm_'),
+      href: payload.href || (b.progress && b.progress.href) || '',
+      percent: Math.max(0, Math.min(100, Number(payload.percent) || 0)),
+      note: String(payload.note || '').slice(0, 200),
+      addedAt: new Date().toISOString(),
+    };
+    b.bookmarks.push(bm);
+    await this.save();
+    return { ok: true, book: b, bookmark: bm };
+  }
+
+  async deleteBookmark(id, bmId) {
+    const b = this.get(id);
+    if (!b) return { ok: false, error: '未找到书籍' };
+    if (!Array.isArray(b.bookmarks)) return { ok: true, book: b };
+    b.bookmarks = b.bookmarks.filter((x) => x.id !== bmId);
+    await this.save();
+    return { ok: true, book: b };
+  }
+
+  /* --------------------------- 全文搜索 --------------------------- */
+
+  /** 抽取单章纯文本（去脚本/样式/标签 + 实体解码） */
+  async chapterText(id, href) {
+    const b = this.get(id);
+    if (!b) return '';
+    const abs = path.join(this.bookDir(id), 'extracted', href);
+    if (!abs.startsWith(this.bookDir(id))) return '';
+    if (!fs.existsSync(abs)) return '';
+    let h = await fsp.readFile(abs, 'utf8');
+    h = h.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '');
+    h = h.replace(/<[^>]+>/g, ' ');
+    h = h.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+    h = h.replace(/[ \t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return h;
+  }
+
+  /** 全书搜索：遍历 spine 每章抽文本做不区分大小写匹配，返回含摘要的结果 */
+  async search(id, q) {
+    const b = this.get(id);
+    if (!b) return { err: '书籍不存在' };
+    if (b.format !== 'epub') return { err: '仅 EPUB 支持全文搜索' };
+    const term = String(q || '').trim().toLowerCase();
+    if (!term) return { results: [] };
+    const results = [];
+    const spine = (b.meta && b.meta.spine) || [];
+    const toc = (b.meta && b.meta.toc) || [];
+    for (let i = 0; i < spine.length; i++) {
+      const s = spine[i];
+      const txt = await this.chapterText(id, s.href);
+      if (!txt) continue;
+      const lower = txt.toLowerCase();
+      const hit = lower.indexOf(term);
+      if (hit < 0) continue;
+      const start = Math.max(0, hit - 30);
+      const end = Math.min(txt.length, hit + term.length + 90);
+      let snippet = txt.slice(start, end).replace(/\s+/g, ' ');
+      if (start > 0) snippet = '…' + snippet;
+      if (end < txt.length) snippet = snippet + '…';
+      const tocHit = toc.find((t) => t.href === s.href);
+      results.push({
+        href: s.href,
+        chapterIndex: i,
+        title: (tocHit && tocHit.title) || `第 ${i + 1} 节`,
+        snippet,
+      });
+    }
+    return { results };
   }
 }
 

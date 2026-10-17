@@ -4172,3 +4172,53 @@ pre.preview-md {
 .eb-edit-row { margin-bottom: 12px; }
 .eb-edit-label { font-size: 12px; color: var(--ink-3); display: block; margin-bottom: 4px; }
 .eb-edit { font-size: 13px; }
+
+/* 目录侧边栏（EPUB 阅读器内，可折叠） */
+.eb-toc-side {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 280px; z-index: 20;
+  background: #fff; border-right: 1px solid var(--line);
+  transform: translateX(-100%); transition: transform .18s ease;
+  display: flex; flex-direction: column; box-shadow: 2px 0 12px rgba(0,0,0,.06);
+}
+.eb-reader.eb-toc-open .eb-toc-side { transform: translateX(0); }
+.eb-toc-side-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.eb-toc-side-title { font-size: 12px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .5px; }
+.eb-toc-side-close { border: none; background: none; font-size: 20px; line-height: 1; color: var(--ink-3); cursor: pointer; }
+.eb-toc-side-list { flex: 1; overflow: auto; padding: 6px 0; }
+.eb-toc-side-item { padding: 9px 12px; font-size: 13px; color: var(--ink-2); cursor: pointer; border-bottom: 1px solid #f1ead9; line-height: 1.4; }
+.eb-toc-side-item:hover { background: #f3ecdb; }
+.eb-toc-side-item.active { background: #e7f0ee; color: #1a5c56; font-weight: 600; border-left: 3px solid #1a5c56; padding-left: 9px; }
+
+/* 书签面板（EPUB 阅读器内，可折叠） */
+.eb-bm-panel {
+  position: absolute; top: 0; bottom: 0; right: 0; width: 300px; z-index: 21;
+  background: #fff; border-left: 1px solid var(--line);
+  transform: translateX(100%); transition: transform .18s ease;
+  display: flex; flex-direction: column; box-shadow: -2px 0 12px rgba(0,0,0,.06);
+}
+.eb-reader.eb-bm-open .eb-bm-panel { transform: translateX(0); }
+.eb-bm-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.eb-bm-title { font-size: 12px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .5px; flex: 1; }
+.eb-bm-close { border: none; background: none; font-size: 20px; line-height: 1; color: var(--ink-3); cursor: pointer; }
+.eb-bm-list { flex: 1; overflow: auto; padding: 8px 0; }
+.eb-bm-empty { padding: 16px 14px; font-size: 12.5px; color: var(--ink-4); line-height: 1.6; }
+.eb-bm-item { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid #f1ead9; cursor: pointer; }
+.eb-bm-item:hover { background: #f3ecdb; }
+.eb-bm-info { flex: 1; min-width: 0; }
+.eb-bm-chapter { font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eb-bm-sub { font-size: 11px; color: var(--ink-4); margin-top: 2px; }
+.eb-bm-del { border: 1px solid var(--line); background: #fff; color: #c0392b; border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; white-space: nowrap; }
+
+/* 全文搜索（EPUB 阅读器顶栏输入框 + 结果面板） */
+.eb-search-box { width: 150px; padding: 5px 9px; border: 1px solid var(--line); border-radius: 7px; background: #fff; font-size: 12px; color: var(--ink-2); }
+.eb-search-panel {
+  position: absolute; top: 46px; right: 12px; width: 340px; max-height: 60%; z-index: 30;
+  background: #fff; border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.12); overflow: auto;
+}
+.eb-search-hint { padding: 12px 14px; font-size: 12.5px; color: var(--ink-4); }
+.eb-search-item { padding: 10px 14px; border-bottom: 1px solid #f1ead9; cursor: pointer; }
+.eb-search-item:last-child { border-bottom: none; }
+.eb-search-item:hover { background: #f3ecdb; }
+.eb-search-item-title { font-size: 13px; font-weight: 600; color: #1a5c56; margin-bottom: 3px; }
+.eb-search-item-snip { font-size: 12px; color: var(--ink-2); line-height: 1.5; }

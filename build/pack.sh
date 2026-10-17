@@ -106,7 +106,7 @@ echo "    体积   $(du -sh "$APP" | cut -f1)"
 #    旧包整包移入 ~/.Trash（带时间戳、可恢复），再把新包改名进 /Applications。
 #    因 /Applications 与 dist 同属启动卷，mv 是瞬时 rename，不会触发守卫。
 echo "==> 部署到 /Applications/${APP_NAME}.app"
-pkill -f "My Workbench" 2>/dev/null || true
+pkill -f "MacOS/My Workbench" 2>/dev/null || true
 sleep 1
 DST="/Applications/${APP_NAME}.app"
 BAK="$HOME/.Trash/${APP_NAME}.app.bak-$(date +%s)"

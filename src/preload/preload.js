@@ -111,6 +111,8 @@ contextBridge.exposeInMainWorld('api', {
     calibre: () => invoke('ebooks:calibre'),
     convert: (id, to) => invoke('ebooks:convert', id, to),
     open: (id) => invoke('ebooks:open', id),
+    bookmark: (id, action, payload) => invoke('ebooks:bookmark', id, action, payload),
+    search: (id, q) => invoke('ebooks:search', id, q),
   },
 
   // 拖拽进来的 File 对象 → 真实磁盘路径（Electron 32+ 不再有 File.path）

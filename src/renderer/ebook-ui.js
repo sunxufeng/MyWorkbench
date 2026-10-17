@@ -291,6 +291,7 @@ async function ebStartRead(book, jumpHref) {
     title: book.title,
     spine: (book.meta && book.meta.spine) || [],
     toc: (book.meta && book.meta.toc) || [],
+    bookmarks: (book.bookmarks || []),
     href: jumpHref || (book.progress && book.progress.href) || (book.meta && book.meta.spine && book.meta.spine[0] && book.meta.spine[0].href),
     index: 0,
     theme: state.eb.reader ? state.eb.reader.theme : 'sepia',
@@ -360,6 +361,51 @@ function ebRenderEpub(detail, reader) {
   big.onclick = () => { reader.fontScale = Math.min(1.8, reader.fontScale + 0.1); ebEpubApplyFont(reader); };
   top.appendChild(small);
   top.appendChild(big);
+  // 目录侧边栏开关
+  const tocBtn = el('button', 'tb', '☰ 目录');
+  tocBtn.onclick = () => wrap.classList.toggle('eb-toc-open');
+  top.appendChild(tocBtn);
+  // 书签
+  const bmBtn = el('button', 'tb', '🔖 书签');
+  bmBtn.onclick = () => {
+    wrap.classList.toggle('eb-bm-open');
+    ebEpubRenderBookmarks(detail, reader, bmPanel);
+  };
+  top.appendChild(bmBtn);
+  // 全文搜索
+  const searchBox = el('input', 'eb-search-box');
+  searchBox.placeholder = '全文搜索…';
+  let searchTimer = null;
+  searchBox.oninput = () => {
+    clearTimeout(searchTimer);
+    const q = searchBox.value.trim();
+    if (!q) { searchPanel.style.display = 'none'; return; }
+    searchTimer = setTimeout(async () => {
+      searchPanel.innerHTML = '<div class="eb-search-hint">搜索中…</div>';
+      searchPanel.style.display = 'block';
+      try {
+        const r = await API.ebooks.search(reader.id, q);
+        if (r && r.err) { searchPanel.innerHTML = '<div class="eb-search-hint">' + esc(r.err) + '</div>'; return; }
+        const res = (r && r.results) || [];
+        if (!res.length) { searchPanel.innerHTML = '<div class="eb-search-hint">没有匹配结果</div>'; return; }
+        searchPanel.innerHTML = '';
+        res.forEach((item) => {
+          const row = el('div', 'eb-search-item');
+          row.appendChild(el('div', 'eb-search-item-title', item.title));
+          row.appendChild(el('div', 'eb-search-item-snip', item.snippet));
+          row.onclick = () => {
+            searchPanel.style.display = 'none';
+            searchBox.value = '';
+            ebEpubGoToHref(detail, reader, item.href);
+          };
+          searchPanel.appendChild(row);
+        });
+      } catch (e) {
+        searchPanel.innerHTML = '<div class="eb-search-hint">搜索失败</div>';
+      }
+    }, 320);
+  };
+  top.appendChild(searchBox);
   wrap.appendChild(top);
 
   const progress = el('div', 'eb-reader-progress');
@@ -368,6 +414,21 @@ function ebRenderEpub(detail, reader) {
   progress.appendChild(pfill);
   progress.appendChild(el('div', 'eb-reader-progress-label', `${reader.index + 1} / ${reader.spine.length}`));
   wrap.appendChild(progress);
+
+  // 目录侧边栏（浮层）
+  const tocSide = el('div', 'eb-toc-side');
+  reader._tocSide = tocSide;
+  ebEpubRenderTocSide(detail, reader, tocSide);
+  wrap.appendChild(tocSide);
+
+  // 书签面板（浮层）
+  const bmPanel = el('div', 'eb-bm-panel');
+  wrap.appendChild(bmPanel);
+
+  // 搜索结果面板（浮层）
+  const searchPanel = el('div', 'eb-search-panel');
+  searchPanel.style.display = 'none';
+  wrap.appendChild(searchPanel);
 
   const frame = el('iframe', 'eb-reader-frame');
   frame.setAttribute('sandbox', 'allow-same-origin allow-popups');
@@ -380,6 +441,101 @@ function ebRenderEpub(detail, reader) {
   ebEpubApplyTheme(reader);
   ebEpubApplyFont(reader);
   ebEpubLoad(detail, reader, reader.index);
+}
+
+/* ---------- 目录侧边栏 ---------- */
+function ebEpubRenderTocSide(detail, reader, side) {
+  side.innerHTML = '';
+  const head = el('div', 'eb-toc-side-head');
+  head.appendChild(el('span', 'eb-toc-side-title', '目录'));
+  const closeBtn = el('button', 'eb-toc-side-close', '×');
+  closeBtn.onclick = () => { const w = side.parentElement; if (w) w.classList.remove('eb-toc-open'); };
+  head.appendChild(closeBtn);
+  side.appendChild(head);
+  const list = el('div', 'eb-toc-side-list');
+  (reader.toc || []).forEach((t) => {
+    const item = el('div', 'eb-toc-side-item' + (t.href === reader.href ? ' active' : ''));
+    item.style.paddingLeft = 12 + (t.level || 0) * 14 + 'px';
+    item.textContent = t.title || '(无标题)';
+    item.onclick = () => ebEpubGoToHref(detail, reader, t.href);
+    list.appendChild(item);
+  });
+  side.appendChild(list);
+}
+
+/* ---------- 书签 ---------- */
+function ebEpubRenderBookmarks(detail, reader, panel) {
+  panel.innerHTML = '';
+  const head = el('div', 'eb-bm-head');
+  head.appendChild(el('span', 'eb-bm-title', '书签'));
+  const addBtn = el('button', 'tb primary', '＋ 添加当前页');
+  addBtn.onclick = () => ebEpubAddBookmark(detail, reader, panel);
+  head.appendChild(addBtn);
+  const closeBtn = el('button', 'eb-bm-close', '×');
+  closeBtn.onclick = () => { const w = panel.parentElement; if (w) w.classList.remove('eb-bm-open'); };
+  head.appendChild(closeBtn);
+  panel.appendChild(head);
+
+  const book = state.eb.books.find((b) => b.id === reader.id);
+  const bms = (book && book.bookmarks) || reader.bookmarks || [];
+  const list = el('div', 'eb-bm-list');
+  if (!bms.length) {
+    list.appendChild(el('div', 'eb-bm-empty', '还没有书签。点「添加当前页」记录当前位置。'));
+  }
+  bms.forEach((bm) => {
+    const row = el('div', 'eb-bm-item');
+    const info = el('div', 'eb-bm-info');
+    const tocHit = (reader.toc || []).find((t) => t.href === bm.href);
+    info.appendChild(el('div', 'eb-bm-chapter', (tocHit && tocHit.title) || '书签'));
+    info.appendChild(el('div', 'eb-bm-sub', Math.round(bm.percent) + '%' + (bm.note ? ' · ' + bm.note : '')));
+    row.appendChild(info);
+    const del = el('button', 'eb-bm-del', '删除');
+    del.onclick = async (e) => {
+      e.stopPropagation();
+      const r = await act(API.ebooks.bookmark(reader.id, 'delete', bm.id));
+      if (r && r.book) {
+        if (book) book.bookmarks = r.book.bookmarks;
+        reader.bookmarks = r.book.bookmarks;
+      }
+      ebEpubRenderBookmarks(detail, reader, panel);
+    };
+    row.appendChild(del);
+    row.onclick = () => {
+      const w = panel.parentElement; if (w) w.classList.remove('eb-bm-open');
+      ebEpubGoToHref(detail, reader, bm.href, bm.percent);
+    };
+    list.appendChild(row);
+  });
+  panel.appendChild(list);
+}
+
+async function ebEpubAddBookmark(detail, reader, panel) {
+  const frame = reader._frame;
+  let percent = 0;
+  if (frame && frame.contentDocument) {
+    const doc = frame.contentDocument;
+    const max = doc.documentElement.scrollHeight - doc.documentElement.clientHeight;
+    if (max > 0) percent = Math.round((doc.documentElement.scrollTop / max) * 100);
+  }
+  const r = await act(API.ebooks.bookmark(reader.id, 'add', { href: reader.href, percent, note: '' }));
+  if (r && r.book) {
+    const book = state.eb.books.find((b) => b.id === reader.id);
+    if (book) book.bookmarks = r.book.bookmarks;
+    reader.bookmarks = r.book.bookmarks;
+    toast('已添加书签', 'ok');
+    ebEpubRenderBookmarks(detail, reader, panel);
+  } else if (r && r.error) {
+    toast(r.error, 'err');
+  }
+}
+
+/* ---------- 按 href 跳转（目录/书签/搜索共用） ---------- */
+function ebEpubGoToHref(detail, reader, href, percent) {
+  const i = reader.spine.findIndex((s) => s.href === href);
+  if (i < 0) { toast('该章节不在阅读顺序中', 'err'); return; }
+  if (percent != null) reader.pendingPercent = percent;
+  ebEpubGo(detail, reader, i);
+  if (reader._tocSide) ebEpubRenderTocSide(detail, reader, reader._tocSide);
 }
 
 function ebEpubApplyTheme(reader) {
@@ -453,8 +609,11 @@ async function ebEpubLoad(detail, reader, index) {
         const overall = ((index + Math.min(1, pct / 100)) / Math.max(1, reader.spine.length)) * 100;
         API.ebooks.progress(reader.id, { href: s.href, percent: Math.round(overall * 10) / 10 }).catch(() => {});
       }, { passive: true });
-      // 恢复阅读进度（按章节内百分比）—— 简化：回到顶部
-      doc.documentElement.scrollTop = 0;
+      // 恢复阅读进度：书签跳转时按章节内百分比恢复，其余回顶部
+      const restore = (reader.pendingPercent != null) ? reader.pendingPercent : 0;
+      reader.pendingPercent = null;
+      const rmax = doc.documentElement.scrollHeight - doc.documentElement.clientHeight;
+      doc.documentElement.scrollTop = (restore / 100) * rmax;
     }
   };
 }

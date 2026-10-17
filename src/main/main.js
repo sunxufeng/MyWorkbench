@@ -365,6 +365,12 @@ function registerIpc() {
   handle('ebooks:calibre', async () => ({ available: await ebookSvc.calibreAvailable() }));
   handle('ebooks:convert', async (id, to) => ebookSvc.convertBook(id, to));
   handle('ebooks:open', async (id) => ebookSvc.openInSystem(id));
+  handle('ebooks:bookmark', async (id, action, payload) => {
+    if (action === 'add') return ebookSvc.addBookmark(id, payload || {});
+    if (action === 'delete') return ebookSvc.deleteBookmark(id, payload);
+    return { ok: false, error: '未知操作' };
+  });
+  handle('ebooks:search', async (id, q) => ebookSvc.search(id, q));
 
   // ---- 文件编辑器 ----
   handle('editor:open-folder', async () => {
