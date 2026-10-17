@@ -12,7 +12,10 @@ if (!state.eb) {
 const EB_READABLE = ['epub', 'pdf', 'txt'];
 
 function ebArchive(url) {
-  return 'archive://' + url.replace(/^\/+/, '');
+  // 注意：archive:// 是自定义 scheme，WHATWG 会把 archive://books/... 的 books 当成 host（authority）吞掉一层，
+  // 必须用三个斜杠 archive:///rel 让 host 为空、整条相对路径都落在 path 上，否则后端解析会少一层目录。
+  if (url.startsWith('archive://')) return url;
+  return 'archive:///' + url.replace(/^\/+/, '');
 }
 
 /* ---------------------------------------------------------- 中栏：书库 */

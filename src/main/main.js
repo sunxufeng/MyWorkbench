@@ -972,15 +972,29 @@ app.whenReady().then(async () => {
   feishu = new FeishuClient(lib);
 
   // archive:// 只读服务资料库目录内的文件
+  const ARCHIVE_MIME = {
+    pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+    gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', svg: 'image/svg+xml',
+    epub: 'application/epub+zip', mobi: 'application/x-mobipocket-ebook', azw: 'application/vnd.amazon.ebook', azw3: 'application/x-mobipocket-ebook',
+    txt: 'text/plain; charset=utf-8', html: 'text/html; charset=utf-8', css: 'text/css; charset=utf-8',
+    js: 'application/javascript', json: 'application/json',
+    woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf', otf: 'font/otf',
+  };
   protocol.handle('archive', async (request) => {
     try {
       const url = new URL(request.url);
-      const rel = decodeURIComponent(url.pathname.replace(/^\/+/, ''));
-      if (!rel) return new Response('Not found', { status: 404 });
-      const abs = path.resolve(store.libraryPath, ...rel.split('/'));
+      // 分段解码，避免整段 decode 把路径分隔破坏；同时把 WHATWG 误判为 host 的段补回（archive://host/rel 的 host 会被吞一层）
+      const segs = url.pathname.split('/').filter(Boolean).map((s) => decodeURIComponent(s));
+      const hostSeg = url.host ? decodeURIComponent(url.host) : '';
+      const allSegs = hostSeg ? [hostSeg, ...segs] : segs;
+      if (!allSegs.length) return new Response('Not found', { status: 404 });
+      const abs = path.resolve(store.libraryPath, ...allSegs);
       if (!store.isInsideLibrary(abs)) return new Response('Forbidden', { status: 403 });
       if (!fs.existsSync(abs)) return new Response('Not found', { status: 404 });
-      return net.fetch(pathToFileURL(abs).toString());
+      const data = await fsp.readFile(abs);
+      const ext = path.extname(abs).toLowerCase().replace(/^\./, '');
+      const type = ARCHIVE_MIME[ext] || 'application/octet-stream';
+      return new Response(data, { headers: { 'Content-Type': type } });
     } catch (err) {
       return new Response('Error: ' + err.message, { status: 500 });
     }
