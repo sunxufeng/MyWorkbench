@@ -354,7 +354,7 @@ function registerIpc() {
 
   // ---- 本地电子书库（对标 Calibre 的本地化核心能力）----
   handle('ebooks:import', async (paths) => ebookSvc.importBooks(paths || []));
-  handle('ebooks:list', async () => ebookSvc.list());
+  handle('ebooks:list', async () => ({ items: ebookSvc.list() }));
   handle('ebooks:get', async (id) => ebookSvc.get(id));
   handle('ebooks:meta', async (id, patch) => ebookSvc.updateMeta(id, patch));
   handle('ebooks:delete', async (id) => ebookSvc.deleteBook(id));

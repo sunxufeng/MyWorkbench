@@ -283,7 +283,7 @@ class EbookService {
       }
     }
     await this.save();
-    return results;
+    return { ok: true, items: results };
   }
 
   async importOne(p) {

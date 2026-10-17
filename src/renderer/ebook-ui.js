@@ -107,8 +107,9 @@ function ebCard(b) {
 
 async function ebLoadBooks() {
   try {
-    const list = await act(API.ebooks.list());
-    state.eb.books = Array.isArray(list) ? list : [];
+    const res = await act(API.ebooks.list());
+    if (res && Array.isArray(res.items)) state.eb.books = res.items;
+    else state.eb.books = [];
   } catch (e) {
     state.eb.books = [];
     toast('加载书库失败：' + (e.message || e), 'err');
@@ -124,9 +125,10 @@ async function ebImport() {
     const res = await act(API.ebooks.import(r.paths));
     await ebLoadBooks();
     renderEbooksLibrary(); // 导入后重绘网格（否则界面看不到新导入的书）
-    if (res == null) return; // 整批 IPC 失败：act 已提示
-    const ok = res.filter((x) => x && x.ok).length;
-    const fail = res.filter((x) => x && !x.ok);
+    if (res == null || res.items == null) return; // 整批 IPC 失败：act 已提示
+    const items = Array.isArray(res.items) ? res.items : [];
+    const ok = items.filter((x) => x && x.ok).length;
+    const fail = items.filter((x) => x && !x.ok);
     if (ok) toast(`已导入 ${ok} 本${fail.length ? `，${fail.length} 本失败` : ''}`, 'ok');
     else toast('导入失败：' + ((fail[0] && fail[0].error) || '未知错误'), 'err');
   } catch (e) {
