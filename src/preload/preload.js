@@ -143,11 +143,6 @@ contextBridge.exposeInMainWorld('api', {
     vaultDelete: (id) => invoke('tk:vault-delete', id),
     vaultGet: (id) => invoke('tk:vault-get', id),
     vaultGen: (opts) => invoke('tk:vault-gen', opts),
-    // 笔记
-    notesList: () => invoke('tk:notes-list'),
-    noteGet: (id) => invoke('tk:note-get', id),
-    noteSave: (id, body) => invoke('tk:note-save', id, body),
-    noteDelete: (id) => invoke('tk:note-delete', id),
     // 任务
     tasksList: () => invoke('tk:tasks-list'),
     taskAdd: (t) => invoke('tk:task-add', t),

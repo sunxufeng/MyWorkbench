@@ -8,12 +8,9 @@
 
 if (!state.tk) {
   state.tk = {
-    sub: 'password', // password|notes|docker|tasks|disk|launcher|window|screenshot
+    sub: 'password', // password|docker|tasks|disk|launcher|window|screenshot
     vaultUnlocked: false,
     vaultItems: [],
-    notes: [],
-    noteCur: null,
-    noteBody: '',
     tasks: [],
     cmds: [],
     disk: null,
@@ -28,7 +25,6 @@ if (!state.tk) {
 
 const TK_SUBS = [
   { id: 'password', icon: '🔐', label: '密码管理' },
-  { id: 'notes', icon: '📝', label: '笔记' },
   { id: 'docker', icon: '🐳', label: 'Docker' },
   { id: 'tasks', icon: '✅', label: '任务' },
   { id: 'disk', icon: '💽', label: '磁盘' },
@@ -62,7 +58,7 @@ function renderToolkitDetail() {
   detail.innerHTML = '';
   detail.classList.remove('ed-mode');
   const map = {
-    password: tkPassword, notes: tkNotes, docker: tkDocker, tasks: tkTasks,
+    password: tkPassword, docker: tkDocker, tasks: tkTasks,
     disk: tkDisk, launcher: tkLauncher, window: tkWindow, screenshot: tkScreenshot,
   };
   const fn = map[state.tk.sub] || tkPassword;
@@ -226,56 +222,6 @@ async function tkVaultGenerate(detail) {
   foot.append(sp, regen, copy);
   body.appendChild(foot);
   openModal({ title: '密码生成器', body });
-}
-
-/* ========================================================== 2. 笔记管理 */
-
-async function tkNotes(detail) {
-  tkBar(detail, '📝 笔记');
-  const wrap = el('div', 'tk-notes');
-  const listBox = el('div', 'tk-notes-list');
-  const editor = el('div', 'tk-notes-editor');
-  wrap.append(listBox, editor);
-  detail.appendChild(wrap);
-
-  const newBtn = el('button', 'tb primary', '＋ 新建');
-  newBtn.onclick = async () => {
-    const name = '未命名-' + new Date().toISOString().slice(0, 10);
-    await act(API.toolkit.noteSave(name, '# ' + name + '\n\n'));
-    state.tk.notes = ((await act(await act(API.toolkit.notesList()))) || {}).items || [];
-    tkRenderNotesList(listBox, editor);
-  };
-  listBox.appendChild(newBtn);
-  state.tk.notes = ((await act(await act(API.toolkit.notesList()))) || {}).items || [];
-  tkRenderNotesList(listBox, editor);
-}
-
-function tkRenderNotesList(listBox, editor) {
-  [...listBox.querySelectorAll('.tk-note-item')].forEach((n) => n.remove());
-  state.tk.notes.forEach((n2) => {
-    const item = el('div', 'tk-note-item' + (state.tk.noteCur === n2.id ? ' sel' : ''));
-    item.appendChild(el('div', 'tk-note-name', n2.title || n2.name));
-    item.onclick = async () => {
-      state.tk.noteCur = n2.id;
-      const full = await act(API.toolkit.noteGet(n2.id));
-      state.tk.noteBody = full ? full.body : '';
-      tkRenderNotesList(listBox, editor);
-      tkRenderNoteEditor(editor, n2);
-    };
-    listBox.appendChild(item);
-  });
-}
-
-function tkRenderNoteEditor(editor, note) {
-  editor.innerHTML = '';
-  const ta = el('textarea', 'tk-notes-ta');
-  ta.value = state.tk.noteBody || '';
-  const save = el('button', 'tb primary', '保存');
-  save.onclick = async () => { await act(API.toolkit.noteSave(note.id, ta.value)); state.tk.noteBody = ta.value; toast('已保存', 'ok'); };
-  const del = el('button', 'tb danger', '删除');
-  del.onclick = async () => { await act(API.toolkit.noteDelete(note.id)); state.tk.notes = ((await act(await act(API.toolkit.notesList()))) || {}).items || []; state.tk.noteCur = null; tkRenderNotesList(document.querySelector('.tk-notes-list'), editor); editor.innerHTML = ''; };
-  const bar2 = el('div', 'tk-notes-bar'); bar2.append(save, del);
-  editor.append(bar2, ta);
 }
 
 /* ========================================================== 3. Docker */

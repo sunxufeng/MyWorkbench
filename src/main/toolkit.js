@@ -2,15 +2,14 @@
 /**
  * My Workbench —— 工具包（Toolkit）主进程服务
  *
- * 八个参考子模块的核心能力统一在此实现（零依赖，全部依赖 Node 内置模块）：
+ * 七个参考子模块的核心能力统一在此实现（零依赖，全部依赖 Node 内置模块）：
  *   1. 密码管理（Bitwarden 参考）—— AES-256-GCM + PBKDF2 加密 vault、主密码解锁、生成器、检索
- *   2. 笔记管理（Obsidian 参考）—— Markdown 文件本地组织、双向链接在渲染层解析
+ *   2. 任务管理（Things + Linear 参考）—— 任务 CRUD、看板、状态流转
  *   3. 本地 Docker 管理（OrbStack 参考）—— 通过 docker CLI 列出/启停/删除容器与镜像
- *   4. 任务管理（Things + Linear 参考）—— 任务 CRUD、看板、状态流转
- *   5. 磁盘管理（DaisyDisk 参考）—— 目录遍历算大小、可视化、清理
- *   6. 启动器/效率（Raycast 参考）—— 命令注册、搜索、一键执行
- *   7. 窗口分屏（Rectangle 参考）—— 通过 osascript 控制窗口位置/布局
- *   8. 截屏录屏（CleanShot X 参考）—— 通过 screencapture 实现区域截屏
+ *   4. 磁盘管理（DaisyDisk 参考）—— 目录遍历算大小、可视化、清理
+ *   5. 启动器/效率（Raycast 参考）—— 命令注册、搜索、一键执行
+ *   6. 窗口分屏（Rectangle 参考）—— 通过 osascript 控制窗口位置/布局
+ *   7. 截屏录屏（CleanShot X 参考）—— 通过 screencapture 实现区域截屏
  *
  * 数据落在本机资料库目录下的 toolkit/ 子目录。
  */
@@ -100,7 +99,6 @@ class ToolkitService {
       tasks: path.join(this.baseDir, 'tasks.json'),
       launcher: path.join(this.baseDir, 'launcher.json'),
     };
-    this.notesDir = path.join(this.baseDir, 'notes');
     this.vault = null;       // 解锁后的明文记录数组（内存中）
     this.vaultKey = null;    // 当前会话的解密 key
     this.vaultSalt = null;   // 持久化的 salt（vaultSave 复用）
@@ -111,7 +109,6 @@ class ToolkitService {
 
   async ensureDir() {
     await fsp.mkdir(this.baseDir, { recursive: true });
-    await fsp.mkdir(this.notesDir, { recursive: true });
     await this.loadTasks();
     await this.loadLauncher();
     // vault 在解锁时才读取
@@ -223,44 +220,7 @@ class ToolkitService {
     return r ? Object.assign({}, r) : null;
   }
 
-  /* ---------------------------------------------------------- 2. 笔记 */
-
-  async notesList() {
-    try {
-      const files = await fsp.readdir(this.notesDir);
-      const md = files.filter((f) => f.endsWith('.md'));
-      const items = [];
-      for (const f of md) {
-        const p = path.join(this.notesDir, f);
-        const st = await fsp.stat(p);
-        const txt = await fsp.readFile(p, 'utf8');
-        const firstLine = txt.split('\n').find((l) => l.trim());
-        const title = (firstLine || f).replace(/^#\s*/, '').trim();
-        items.push({ id: f, name: f, title, size: st.size, updatedAt: st.mtime.toISOString(), body: txt });
-      }
-      items.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-      return items;
-    } catch { return []; }
-  }
-
-  async noteGet(id) {
-    const p = path.join(this.notesDir, id.endsWith('.md') ? id : id + '.md');
-    try { return { id: path.basename(p), body: await fsp.readFile(p, 'utf8') }; }
-    catch { return null; }
-  }
-
-  async noteSave(id, body) {
-    const fname = id.endsWith('.md') ? id : id + '.md';
-    await fsp.writeFile(path.join(this.notesDir, fname), body || '', 'utf8');
-    return { id: fname };
-  }
-
-  async noteDelete(id) {
-    const p = path.join(this.notesDir, id.endsWith('.md') ? id : id + '.md');
-    try { await fsp.unlink(p); } catch {}
-  }
-
-  /* ---------------------------------------------------------- 4. 任务 */
+  /* ---------------------------------------------------------- 2. 任务 */
 
   async loadTasks() {
     try { this.tasks = JSON.parse(await fsp.readFile(this.paths.tasks, 'utf8')); if (!this.tasks.items) this.tasks.items = []; }
@@ -295,7 +255,7 @@ class ToolkitService {
 
   taskList() { return this.tasks.items; }
 
-  /* ---------------------------------------------------------- 6. 启动器 */
+  /* ---------------------------------------------------------- 3. 启动器 */
 
   async loadLauncher() {
     try { this.launcher = JSON.parse(await fsp.readFile(this.paths.launcher, 'utf8')); if (!this.launcher.commands) this.launcher.commands = []; }
@@ -354,7 +314,7 @@ class ToolkitService {
     return this.launcher.commands.filter((c) => (c.name || '').toLowerCase().includes(s) || (c.target || '').toLowerCase().includes(s));
   }
 
-  /* ---------------------------------------------------------- 3. Docker */
+  /* ---------------------------------------------------------- 4. Docker */
 
   async dockerAvailable() {
     try { await pExecFile('docker', ['version', '--format', '{{.Server.Version}}'], { timeout: 8000 }); return { ok: true }; }
@@ -441,7 +401,7 @@ class ToolkitService {
     return { ok: true, movedTo: dest };
   }
 
-  /* ---------------------------------------------------------- 7. 窗口分屏 */
+  /* ---------------------------------------------------------- 6. 窗口分屏 */
 
   async windowLayout(side) {
     // 通过 AppleScript 将最前面的窗口按布局摆放（需要辅助功能权限）
@@ -487,7 +447,7 @@ class ToolkitService {
     }
   }
 
-  /* ---------------------------------------------------------- 8. 截屏 */
+  /* ---------------------------------------------------------- 7. 截屏 */
 
   async screenshot(opts) {
     // 通过系统 screencapture 交互截屏，保存到 toolkit/shots/

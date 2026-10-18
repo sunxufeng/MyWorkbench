@@ -4413,7 +4413,7 @@ pre.preview-md {
 .tk-fld-label { font-size: 12px; color: var(--ink-3); margin: 8px 0 2px; }
 .spacer { flex: 1; }
 
-.tk-pw, .tk-notes, .tk-docker, .tk-tasks, .tk-disk, .tk-launcher, .tk-window, .tk-shot, .tk-pw-setup { padding: 14px 18px; }
+.tk-pw, .tk-docker, .tk-tasks, .tk-disk, .tk-launcher, .tk-window, .tk-shot, .tk-pw-setup { padding: 14px 18px; }
 .tk-empty { color: var(--ink-4); font-size: 13px; padding: 18px 4px; line-height: 1.6; white-space: pre-wrap; }
 .tk-err { color: var(--danger); font-size: 12px; margin: 6px 0; }
 
@@ -4429,18 +4429,6 @@ pre.preview-md {
 .tk-pw-setup { max-width: 360px; margin: 40px auto; text-align: center; }
 .tk-pw-setup-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
 .tk-pw-setup-tip { font-size: 12px; color: var(--ink-4); line-height: 1.6; margin-bottom: 12px; }
-
-/* 笔记 */
-.tk-notes { display: flex; gap: 0; padding: 0; height: 100%; min-height: 0; }
-.tk-notes-list { width: 230px; min-width: 230px; border-right: 1px solid var(--line); padding: 12px; overflow: auto; background: var(--panel-2); }
-.tk-notes-list .tb { width: 100%; margin-bottom: 8px; }
-.tk-note-item { padding: 8px 10px; border-radius: var(--r-md); cursor: pointer; font-size: 13px; color: var(--ink-2); margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tk-note-item:hover { background: var(--panel-3); }
-.tk-note-item.sel { background: var(--moss-soft); color: var(--moss-deep); font-weight: 600; }
-.tk-notes-editor { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 14px; }
-.tk-notes-bar { display: flex; gap: 8px; margin-bottom: 8px; }
-.tk-notes-ta { flex: 1; min-height: 200px; resize: none; border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px; font-size: 13.5px; line-height: 1.7; color: var(--ink); background: var(--panel); font-family: inherit; }
-.tk-notes-ta:focus { outline: none; border-color: var(--moss-line); box-shadow: 0 0 0 2px var(--moss-soft); }
 
 /* Docker */
 .tk-docker-bar { margin-bottom: 12px; }

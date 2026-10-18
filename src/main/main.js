@@ -413,11 +413,6 @@ function registerIpc() {
   handle('tk:vault-delete', async (id) => toolkitSvc.vaultDelete(id));
   handle('tk:vault-get', async (id) => toolkitSvc.vaultDecryptOne(id));
   handle('tk:vault-gen', async (opts) => ({ password: generatePassword(opts) }));
-  // 笔记
-  handle('tk:notes-list', async () => ({ items: await toolkitSvc.notesList() }));
-  handle('tk:note-get', async (id) => toolkitSvc.noteGet(id));
-  handle('tk:note-save', async (id, body) => toolkitSvc.noteSave(id, body));
-  handle('tk:note-delete', async (id) => toolkitSvc.noteDelete(id));
   // 任务
   handle('tk:tasks-list', async () => ({ items: toolkitSvc.taskList() }));
   handle('tk:task-add', async (t) => toolkitSvc.taskAdd(t));
