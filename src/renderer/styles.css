@@ -4392,3 +4392,113 @@ pre.preview-md {
 
 /* webview 加载占位 */
 .an-webview-wrap:has(.an-webview:empty) { background: var(--panel-3); }
+
+/* ========================================================== 工具包（Toolkit） */
+.tk-mode .list-head { display: none; }
+
+/* 二级导航（列表栏） */
+.tk-subhead { font-size: 13px; font-weight: 700; color: var(--ink-2); padding: 14px 14px 6px; }
+.tk-sub { display: flex; align-items: center; gap: 10px; padding: 9px 14px; cursor: pointer; border-radius: var(--r-md); color: var(--ink-2); font-size: 13px; }
+.tk-sub:hover { background: var(--panel-3); }
+.tk-sub.sel { background: var(--moss-soft); color: var(--moss-deep); font-weight: 600; }
+.tk-sub-icon { font-size: 16px; }
+.tk-sub-tip { font-size: 11px; color: var(--ink-4); padding: 8px 14px; line-height: 1.5; }
+
+/* 详情区通用 */
+.tk-bar { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.tk-title { font-size: 18px; font-weight: 700; color: var(--ink); margin: 0; }
+.tk-input { width: 100%; border: 1px solid var(--line); border-radius: var(--r-md); padding: 8px 10px; font-size: 13px; color: var(--ink); background: var(--panel); font-family: inherit; box-sizing: border-box; }
+.tk-input:focus { outline: none; border-color: var(--moss-line); box-shadow: 0 0 0 2px var(--moss-soft); }
+.tk-form { display: flex; flex-direction: column; }
+.tk-fld-label { font-size: 12px; color: var(--ink-3); margin: 8px 0 2px; }
+.spacer { flex: 1; }
+
+.tk-pw, .tk-notes, .tk-docker, .tk-tasks, .tk-disk, .tk-launcher, .tk-window, .tk-shot, .tk-pw-setup { padding: 14px 18px; }
+.tk-empty { color: var(--ink-4); font-size: 13px; padding: 18px 4px; line-height: 1.6; white-space: pre-wrap; }
+.tk-err { color: var(--danger); font-size: 12px; margin: 6px 0; }
+
+/* 密码 */
+.tk-pw-tools { display: flex; gap: 8px; margin-bottom: 10px; }
+.tk-pw-list { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.tk-pw-card { display: flex; align-items: center; gap: 12px; padding: 11px 13px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); }
+.tk-pw-card:hover { border-color: var(--moss-line); }
+.tk-pw-main { flex: 1; min-width: 0; }
+.tk-pw-title { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.tk-pw-meta { font-size: 11.5px; color: var(--ink-4); margin-top: 2px; }
+.tk-pw-acts { display: flex; gap: 4px; }
+.tk-pw-setup { max-width: 360px; margin: 40px auto; text-align: center; }
+.tk-pw-setup-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+.tk-pw-setup-tip { font-size: 12px; color: var(--ink-4); line-height: 1.6; margin-bottom: 12px; }
+
+/* 笔记 */
+.tk-notes { display: flex; gap: 0; padding: 0; height: 100%; min-height: 0; }
+.tk-notes-list { width: 230px; min-width: 230px; border-right: 1px solid var(--line); padding: 12px; overflow: auto; background: var(--panel-2); }
+.tk-notes-list .tb { width: 100%; margin-bottom: 8px; }
+.tk-note-item { padding: 8px 10px; border-radius: var(--r-md); cursor: pointer; font-size: 13px; color: var(--ink-2); margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-note-item:hover { background: var(--panel-3); }
+.tk-note-item.sel { background: var(--moss-soft); color: var(--moss-deep); font-weight: 600; }
+.tk-notes-editor { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 14px; }
+.tk-notes-bar { display: flex; gap: 8px; margin-bottom: 8px; }
+.tk-notes-ta { flex: 1; min-height: 200px; resize: none; border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px; font-size: 13.5px; line-height: 1.7; color: var(--ink); background: var(--panel); font-family: inherit; }
+.tk-notes-ta:focus { outline: none; border-color: var(--moss-line); box-shadow: 0 0 0 2px var(--moss-soft); }
+
+/* Docker */
+.tk-docker-bar { margin-bottom: 12px; }
+.tk-docker-hint { font-size: 12px; color: var(--ink-4); }
+.tk-table { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; }
+.tk-table h4 { font-size: 13px; color: var(--ink-2); margin: 8px 0 4px; }
+.tk-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); }
+.tk-c-name { flex: 1; font-size: 13px; color: var(--ink); font-family: 'JetBrains Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-c-state { font-size: 11px; padding: 1px 7px; border-radius: 8px; }
+.tk-c-state.run { background: var(--moss-soft); color: var(--moss-deep); }
+.tk-c-state.stop { background: var(--panel-3); color: var(--ink-4); }
+.tk-c-img, .tk-c-size { font-size: 11px; color: var(--ink-4); }
+
+/* 任务看板 */
+.tk-tasks { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 0; }
+.tk-tasks > .tk-bar { margin-bottom: 0; }
+.tk-board { flex: 1; display: flex; gap: 12px; padding: 14px; overflow-x: auto; min-height: 0; }
+.tk-col { flex: 1; min-width: 200px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px; display: flex; flex-direction: column; }
+.tk-col-h { font-size: 12.5px; font-weight: 700; color: var(--ink-2); margin-bottom: 8px; padding-left: 2px; }
+.tk-task-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px; margin-bottom: 8px; }
+.tk-task-card:hover { border-color: var(--moss-line); }
+.tk-task-title { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.45; }
+.tk-task-meta { font-size: 11px; color: var(--ink-4); margin-top: 3px; }
+.tk-task-acts { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+
+/* 磁盘 */
+.tk-disk-bar { display: flex; gap: 8px; margin-bottom: 12px; }
+.tk-disk-bar .tk-input { flex: 1; }
+.tk-disk-total { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 10px; }
+.tk-disk-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.tk-disk-bar-graph { height: 14px; min-width: 2px; background: linear-gradient(90deg, var(--moss), var(--moss-deep)); border-radius: 4px; }
+.tk-disk-info { flex: 1; display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
+.tk-disk-name { flex: 1; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-disk-size { color: var(--ink-4); font-family: 'JetBrains Mono', monospace; }
+
+/* 启动器 */
+.tk-launcher { padding: 0; }
+.tk-launcher > .tk-bar { margin-bottom: 0; }
+.tk-launcher-list { padding: 14px; display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+.tk-cmd-card { display: flex; align-items: center; gap: 12px; padding: 11px 13px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); cursor: pointer; }
+.tk-cmd-card:hover { border-color: var(--moss-line); }
+.tk-cmd-icon { font-size: 18px; }
+.tk-cmd-info { flex: 1; min-width: 0; }
+.tk-cmd-name { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.tk-cmd-target { font-size: 11px; color: var(--ink-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-cmd-card .tb { white-space: nowrap; }
+
+/* 窗口分屏 */
+.tk-window-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 14px; }
+.tk-window-btn { padding: 18px 6px; font-size: 13px; }
+
+/* 截屏 */
+.tk-shot { padding: 0; }
+.tk-shot > .tk-bar { margin-bottom: 0; }
+.tk-shot-list { padding: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.tk-shot-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: 8px; }
+.tk-shot-img { width: 100%; border-radius: var(--r-sm, 6px); display: block; }
+.tk-shot-name { font-size: 11px; color: var(--ink-4); margin: 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 弹层表单内的按钮行 */
+.tk-form .tb { align-self: flex-start; }

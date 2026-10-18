@@ -130,6 +130,52 @@ contextBridge.exposeInMainWorld('api', {
     noteSet: (link, title, text) => invoke('ainews:note-set', link, title, text),
   },
 
+  // 工具包（Toolkit）八个子模块
+  toolkit: {
+    // 密码
+    vaultExists: () => invoke('tk:vault-exists'),
+    vaultCreate: (pw) => invoke('tk:vault-create', pw),
+    vaultUnlock: (pw) => invoke('tk:vault-unlock', pw),
+    vaultLock: () => invoke('tk:vault-lock'),
+    vaultList: () => invoke('tk:vault-list'),
+    vaultAdd: (rec) => invoke('tk:vault-add', rec),
+    vaultUpdate: (id, patch) => invoke('tk:vault-update', id, patch),
+    vaultDelete: (id) => invoke('tk:vault-delete', id),
+    vaultGet: (id) => invoke('tk:vault-get', id),
+    vaultGen: (opts) => invoke('tk:vault-gen', opts),
+    // 笔记
+    notesList: () => invoke('tk:notes-list'),
+    noteGet: (id) => invoke('tk:note-get', id),
+    noteSave: (id, body) => invoke('tk:note-save', id, body),
+    noteDelete: (id) => invoke('tk:note-delete', id),
+    // 任务
+    tasksList: () => invoke('tk:tasks-list'),
+    taskAdd: (t) => invoke('tk:task-add', t),
+    taskUpdate: (id, patch) => invoke('tk:task-update', id, patch),
+    taskDelete: (id) => invoke('tk:task-delete', id),
+    // 启动器
+    cmdsList: () => invoke('tk:cmds-list'),
+    cmdsSearch: (q) => invoke('tk:cmds-search', q),
+    cmdAdd: (c) => invoke('tk:cmd-add', c),
+    cmdUpdate: (id, patch) => invoke('tk:cmd-update', id, patch),
+    cmdDelete: (id) => invoke('tk:cmd-delete', id),
+    cmdRun: (id) => invoke('tk:cmd-run', id),
+    // Docker
+    dockerAvailable: () => invoke('tk:docker-available'),
+    dockerContainers: () => invoke('tk:docker-containers'),
+    dockerImages: () => invoke('tk:docker-images'),
+    dockerAction: (kind, action, id) => invoke('tk:docker-action', kind, action, id),
+    // 磁盘
+    home: () => invoke('tk:home'),
+    diskScan: (dir, depth) => invoke('tk:disk-scan', dir, depth),
+    diskClean: (p) => invoke('tk:disk-clean', p),
+    // 窗口分屏
+    windowLayout: (side) => invoke('tk:window-layout', side),
+    // 截屏
+    screenshot: (opts) => invoke('tk:screenshot', opts),
+    shotsList: () => invoke('tk:shots-list'),
+  },
+
   // 拖拽进来的 File 对象 → 真实磁盘路径（Electron 32+ 不再有 File.path）
   pathForFile: (file) => {
     try {

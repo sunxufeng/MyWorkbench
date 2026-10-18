@@ -31,6 +31,7 @@ const weather = require('./weather');
 const weread = require('./weread');
 const { EbookService } = require('./ebooks');
 const { AiNewsService } = require('./ai-news');
+const { ToolkitService } = require('./toolkit');
 const {
   occurrencesOn,
   occurrencesInRange,
@@ -60,6 +61,8 @@ let lib = null;
 let ebookSvc = null;
 /** @type {AiNewsService|null} */
 let aiNewsSvc = null;
+/** @type {ToolkitService|null} */
+let toolkitSvc = null;
 /** @type {FeishuClient|null} */
 let feishu = null;
 /** 这次启动是否把旧版「人生档案馆」目录改名迁移过来了 */
@@ -103,6 +106,8 @@ async function initStore() {
   await ebookSvc.ensureBooksDir();
   aiNewsSvc = new AiNewsService(store.libraryPath);
   await aiNewsSvc.ensureDir();
+  toolkitSvc = new ToolkitService(store.libraryPath);
+  await toolkitSvc.ensureDir();
   return store;
 }
 
@@ -395,6 +400,50 @@ function registerIpc() {
   handle('ainews:toggle-readlater', async (item) => aiNewsSvc.toggleReadLater(item || {}));
   handle('ainews:note-get', async (link, title) => aiNewsSvc.getNote(aiNewsSvc.noteKey(link, title)));
   handle('ainews:note-set', async (link, title, text) => aiNewsSvc.setNote(aiNewsSvc.noteKey(link, title), text));
+
+  /* ---------------- 工具包（Toolkit） ---------------- */
+  // 密码
+  handle('tk:vault-exists', async () => ({ exists: await toolkitSvc.vaultExists() }));
+  handle('tk:vault-create', async (pw) => toolkitSvc.vaultCreate(pw));
+  handle('tk:vault-unlock', async (pw) => toolkitSvc.vaultUnlock(pw));
+  handle('tk:vault-lock', async () => { toolkitSvc.vaultLock(); return { ok: true }; });
+  handle('tk:vault-list', async () => ({ items: toolkitSvc.vaultList(), locked: toolkitSvc.vaultLocked }));
+  handle('tk:vault-add', async (rec) => toolkitSvc.vaultAdd(rec));
+  handle('tk:vault-update', async (id, patch) => toolkitSvc.vaultUpdate(id, patch));
+  handle('tk:vault-delete', async (id) => toolkitSvc.vaultDelete(id));
+  handle('tk:vault-get', async (id) => toolkitSvc.vaultDecryptOne(id));
+  handle('tk:vault-gen', async (opts) => ({ password: generatePassword(opts) }));
+  // 笔记
+  handle('tk:notes-list', async () => ({ items: await toolkitSvc.notesList() }));
+  handle('tk:note-get', async (id) => toolkitSvc.noteGet(id));
+  handle('tk:note-save', async (id, body) => toolkitSvc.noteSave(id, body));
+  handle('tk:note-delete', async (id) => toolkitSvc.noteDelete(id));
+  // 任务
+  handle('tk:tasks-list', async () => ({ items: toolkitSvc.taskList() }));
+  handle('tk:task-add', async (t) => toolkitSvc.taskAdd(t));
+  handle('tk:task-update', async (id, patch) => toolkitSvc.taskUpdate(id, patch));
+  handle('tk:task-delete', async (id) => toolkitSvc.taskDelete(id));
+  // 启动器
+  handle('tk:cmds-list', async () => ({ items: toolkitSvc.cmdList() }));
+  handle('tk:cmds-search', async (q) => ({ items: toolkitSvc.cmdSearch(q) }));
+  handle('tk:cmd-add', async (c) => toolkitSvc.cmdAdd(c));
+  handle('tk:cmd-update', async (id, patch) => toolkitSvc.cmdUpdate(id, patch));
+  handle('tk:cmd-delete', async (id) => toolkitSvc.cmdDelete(id));
+  handle('tk:cmd-run', async (id) => toolkitSvc.cmdRun(id));
+  // Docker
+  handle('tk:docker-available', async () => toolkitSvc.dockerAvailable());
+  handle('tk:docker-containers', async () => ({ items: await toolkitSvc.dockerContainers() }));
+  handle('tk:docker-images', async () => ({ items: await toolkitSvc.dockerImages() }));
+  handle('tk:docker-action', async (kind, action, id) => toolkitSvc.dockerAction(kind, action, id));
+  // 磁盘
+  handle('tk:home', async () => ({ home: require('node:os').homedir() }));
+  handle('tk:disk-scan', async (dir, depth) => toolkitSvc.diskScan(dir, depth));
+  handle('tk:disk-clean', async (p) => toolkitSvc.diskClean(p));
+  // 窗口分屏
+  handle('tk:window-layout', async (side) => toolkitSvc.windowLayout(side));
+  // 截屏
+  handle('tk:shots-list', async () => ({ items: await toolkitSvc.shotsList() }));
+  handle('tk:screenshot', async (opts) => toolkitSvc.screenshot(opts));
 
   // ---- 文件编辑器 ----
   handle('editor:open-folder', async () => {

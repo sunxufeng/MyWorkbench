@@ -450,6 +450,7 @@ function renderSidebar() {
   mk('weread', '📚', '微信读书', '', '');
   mk('ebooks', '📖', '书库', '', '');
   mk('ainews', '🛰', 'AI 资讯', '', '');
+  mk('toolkit', '🧰', '工具包', '', '');
   mk('editor', '💻', '文件编辑器', '', '');
   mk('calendar', '▦', '日历', todayN ? `${todayN} 今日` : '', '');
   mk('all', '▤', '全部资料', st.total);
@@ -630,6 +631,7 @@ function setPaneMode() {
   const ed = state.view === 'editor';
   const eb = state.view === 'ebooks';
   const an = state.view === 'ainews';
+  const tk = state.view === 'toolkit';
   const app = $('#app');
   if (app) {
     app.classList.toggle('cal-mode', cal);
@@ -638,11 +640,12 @@ function setPaneMode() {
     app.classList.toggle('ed-mode', ed);
     app.classList.toggle('eb-mode', eb);
     app.classList.toggle('an-mode', an);
+    app.classList.toggle('tk-mode', tk);
   }
   const head = $('#calHead');
   if (head) head.classList.toggle('hidden', !cal);
   const lh = $('#listHead');
-  if (lh) lh.classList.toggle('hidden', cal || ov || wr || ed || eb || an);
+  if (lh) lh.classList.toggle('hidden', cal || ov || wr || ed || eb || an || tk);
   const sb = $('#listScroll');
   if (sb) sb.classList.toggle('cal-scroll', cal);
   const si = $('#searchInput');
@@ -673,6 +676,11 @@ function renderList() {
     ainEnsureLoaded().then(() => {
       if (state.view === 'ainews') { renderAiNewsList(); renderAiNewsDetail(); }
     });
+    return;
+  }
+  if (state.view === 'toolkit') {
+    renderToolkitList();
+    renderToolkitDetail();
     return;
   }
   if (state.view === 'editor') return renderEditorList();
@@ -2196,6 +2204,7 @@ function renderDetail() {
   if (state.view === 'ebooks') return renderEbooksDetail();
   if (state.view === 'editor') return renderEditorDetail();
   if (state.view === 'ainews') return renderAiNewsDetail();
+  if (state.view === 'toolkit') return renderToolkitDetail();
   if (state.editing) return renderEditor();
   const e = state.entries.find((x) => x.id === state.selectedId);
 
