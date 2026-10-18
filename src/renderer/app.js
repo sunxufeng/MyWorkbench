@@ -653,6 +653,12 @@ function setPaneMode() {
 }
 
 function renderList() {
+  // 离开 AI 资讯阅读时，清掉阅读专注模式（收起的两栏恢复），避免污染其它视图
+  if (state.view !== 'ainews' || !state.ain || !state.ain.reading) {
+    const appEl = document.getElementById('app');
+    if (appEl) appEl.classList.remove('an-reader-focus');
+    if (state.ain) state.ain.readerFocus = false;
+  }
   // 离开总览页时，停掉秒级时钟定时器，避免泄漏
   if (state._ovTimer) {
     clearInterval(state._ovTimer);

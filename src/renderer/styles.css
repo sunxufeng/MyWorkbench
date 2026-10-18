@@ -4393,6 +4393,13 @@ pre.preview-md {
 /* webview 加载占位 */
 .an-webview-wrap:has(.an-webview:empty) { background: var(--panel-3); }
 
+/* AI 资讯阅读专注模式：收起左两栏（导航 + 列表），只留阅读栏与阅读笔记栏 */
+.app.an-reader-focus { grid-template-columns: 0 0 minmax(0, 1fr); }
+.app.an-reader-focus .side-pane,
+.app.an-reader-focus .list-pane { display: none; }
+.an-focus-btn.on { background: var(--moss-deep); color: #fff; border-color: var(--moss-deep); }
+.an-focus-btn.on:hover { background: var(--moss); border-color: var(--moss); }
+
 /* ========================================================== 工具包（Toolkit） */
 .tk-mode .list-head { display: none; }
 

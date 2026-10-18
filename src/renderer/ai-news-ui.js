@@ -21,6 +21,7 @@ if (!state.ain) {
     reading: null, // 当前进入内嵌阅读的文章
     noteDraft: '', // 当前阅读文章的笔记草稿
     noteSaving: false,
+    readerFocus: false, // 阅读专注模式：收起左两栏，只留阅读 + 笔记
     prefsLoaded: false,
     _loadSeq: 0,
   };
@@ -333,6 +334,8 @@ function renderAiNewsDetail() {
   detail.innerHTML = '';
   detail.classList.remove('ed-mode');
 
+  if (!state.ain.reading) ainClearReaderFocus();
+
   if (state.ain.reading) return ainRenderReader(detail, state.ain.reading);
   if (state.ain.sel) return ainRenderArticle(detail, state.ain.sel);
 
@@ -480,13 +483,15 @@ function ainRenderArticle(detail, it) {
 
 function ainRenderReader(detail, it) {
   const bar = [];
-  bar.push(mkTb('← 返回摘要', null, () => { state.ain.reading = null; state.ain.noteDraft = ''; renderAiNewsDetail(); }, '回到文章摘要'));
+  bar.push(mkTb('← 返回摘要', null, () => { state.ain.reading = null; state.ain.noteDraft = ''; ainClearReaderFocus(); renderAiNewsDetail(); }, '回到文章摘要'));
   if (it.link) {
     bar.push(mkTb('在浏览器打开', null, () => openUrl(it.link), '用系统默认浏览器打开原文'));
   }
   const saved = state.ain.readLater.some((x) => normKeyLocal(x.link, x.title) === normKeyLocal(it.link, it.title));
   bar.push(mkTb(saved ? '★ 已收藏' : '☆ 稍后读', null, () => ainToggleReadLater(it)));
   const sp = el('span'); sp.className = 'spacer'; bar.push(sp);
+  const focusBtn = mkTb(state.ain.readerFocus ? '退出专注' : '专注模式', 'an-focus-btn' + (state.ain.readerFocus ? ' on' : ''), () => ainToggleReaderFocus(focusBtn), '收起左右两栏，只留阅读与笔记');
+  bar.push(focusBtn);
   renderDetailBar(bar);
 
   const wrap = el('div', 'an-reader');
@@ -552,6 +557,34 @@ function ainRenderReader(detail, it) {
       status.textContent = '暂无笔记';
     }
   });
+}
+
+/* ---------------------------------------------------------- 阅读专注模式 */
+
+function ainToggleReaderFocus(btn) {
+  state.ain.readerFocus = !state.ain.readerFocus;
+  ainApplyReaderFocus(btn);
+}
+
+function ainApplyReaderFocus(btn) {
+  const app = document.getElementById('app');
+  if (app) app.classList.toggle('an-reader-focus', !!state.ain.readerFocus);
+  if (btn) {
+    btn.textContent = state.ain.readerFocus ? '退出专注' : '专注模式';
+    btn.classList.toggle('on', !!state.ain.readerFocus);
+  }
+  if (state.ain.readerFocus) toast('已进入专注阅读，再点一次「专注模式」退出', 'ok');
+}
+
+function ainClearReaderFocus() {
+  if (!state.ain.readerFocus) {
+    const app = document.getElementById('app');
+    if (app) app.classList.remove('an-reader-focus');
+    return;
+  }
+  state.ain.readerFocus = false;
+  const app = document.getElementById('app');
+  if (app) app.classList.remove('an-reader-focus');
 }
 
 async function ainLoadNote(it) {
