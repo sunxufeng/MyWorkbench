@@ -22,6 +22,7 @@ const crypto = require('node:crypto');
 
 const CACHE_FILE = 'ai-news-cache.json';
 const PREFS_FILE = 'ai-news-prefs.json';
+const NOTES_FILE = 'ai-news-notes.json';
 const FETCH_TIMEOUT = 9000; // 单个信源抓取超时（毫秒）
 const STALE_MS = 6 * 3600 * 1000; // 缓存超过 6 小时视为过期
 const PER_SOURCE_CAP = 30; // 每个信源最多保留条数
@@ -341,13 +342,16 @@ class AiNewsService {
     this.libraryPath = libraryPath;
     this.cacheFile = path.join(libraryPath, CACHE_FILE);
     this.prefsFile = path.join(libraryPath, PREFS_FILE);
+    this.notesFile = path.join(libraryPath, NOTES_FILE);
     this.cache = { updatedAt: '', perSource: {}, items: [] };
     this.prefs = { identity: 'dev', enabledSources: defaultSourcesFor('dev'), readLater: [] };
+    this.notes = {};
   }
 
   async ensureDir() {
     await this.loadCache();
     await this.loadPrefs();
+    await this.loadNotes();
   }
 
   async loadCache() {
@@ -382,6 +386,47 @@ class AiNewsService {
 
   async savePrefs() {
     await fsp.writeFile(this.prefsFile, JSON.stringify(this.prefs), 'utf8');
+  }
+
+  /* ---------------------------------------------------------- 笔记（按文章链接） */
+
+  async loadNotes() {
+    try {
+      const txt = await fsp.readFile(this.notesFile, 'utf8');
+      const j = JSON.parse(txt);
+      if (j && typeof j === 'object' && !Array.isArray(j)) this.notes = j;
+    } catch {
+      this.notes = {};
+    }
+  }
+
+  async saveNotes() {
+    await fsp.writeFile(this.notesFile, JSON.stringify(this.notes), 'utf8');
+  }
+
+  noteKey(link, title) {
+    const raw = normKey(link, title);
+    return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 16);
+  }
+
+  async getNote(key) {
+    const n = this.notes[key];
+    return n && typeof n.text === 'string' ? n : null;
+  }
+
+  async setNote(key, text) {
+    if (!key) return null;
+    if (text == null || String(text).trim() === '') {
+      delete this.notes[key];
+    } else {
+      this.notes[key] = { text: String(text).trim(), updatedAt: new Date().toISOString() };
+    }
+    await this.saveNotes();
+    return this.notes[key] || null;
+  }
+
+  async listNotes() {
+    return Object.entries(this.notes).map(([k, v]) => ({ key: k, text: v.text, updatedAt: v.updatedAt }));
   }
 
   getCatalog() {

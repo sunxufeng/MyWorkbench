@@ -18,6 +18,9 @@ if (!state.ain) {
     q: '',
     sel: null, // 当前选中的条目（右栏详情）
     tab: 'today', // today | all
+    reading: null, // 当前进入内嵌阅读的文章
+    noteDraft: '', // 当前阅读文章的笔记草稿
+    noteSaving: false,
     prefsLoaded: false,
     _loadSeq: 0,
   };
@@ -330,6 +333,7 @@ function renderAiNewsDetail() {
   detail.innerHTML = '';
   detail.classList.remove('ed-mode');
 
+  if (state.ain.reading) return ainRenderReader(detail, state.ain.reading);
   if (state.ain.sel) return ainRenderArticle(detail, state.ain.sel);
 
   // 默认：今日速览
@@ -418,9 +422,14 @@ function pickHighlights(pool) {
 
 function ainRenderArticle(detail, it) {
   const bar = [];
-  bar.push(
-    mkTb('在浏览器打开', 'primary', () => { if (it.link) openUrl(it.link); }, '用系统默认浏览器打开原文')
-  );
+  if (it.link) {
+    bar.push(
+      mkTb('内嵌阅读', 'primary', () => { state.ain.reading = it; state.ain.noteDraft = ''; ainLoadNote(it); renderAiNewsDetail(); }, '在 Workbench 内打开原文并做笔记')
+    );
+    bar.push(
+      mkTb('在浏览器打开', null, () => { if (it.link) openUrl(it.link); }, '用系统默认浏览器打开原文')
+    );
+  }
   const saved = state.ain.readLater.some((x) => normKeyLocal(x.link, x.title) === normKeyLocal(it.link, it.title));
   bar.push(
     mkTb(saved ? '★ 已收藏' : '☆ 稍后读', null, () => ainToggleReadLater(it))
@@ -465,6 +474,104 @@ function ainRenderArticle(detail, it) {
   }
 
   detail.appendChild(inner);
+}
+
+/* ---------------------------------------------------------- 内嵌阅读 + 笔记 */
+
+function ainRenderReader(detail, it) {
+  const bar = [];
+  bar.push(mkTb('← 返回摘要', null, () => { state.ain.reading = null; state.ain.noteDraft = ''; renderAiNewsDetail(); }, '回到文章摘要'));
+  if (it.link) {
+    bar.push(mkTb('在浏览器打开', null, () => openUrl(it.link), '用系统默认浏览器打开原文'));
+  }
+  const saved = state.ain.readLater.some((x) => normKeyLocal(x.link, x.title) === normKeyLocal(it.link, it.title));
+  bar.push(mkTb(saved ? '★ 已收藏' : '☆ 稍后读', null, () => ainToggleReadLater(it)));
+  const sp = el('span'); sp.className = 'spacer'; bar.push(sp);
+  renderDetailBar(bar);
+
+  const wrap = el('div', 'an-reader');
+
+  // 左侧：webview
+  const webviewWrap = el('div', 'an-webview-wrap');
+  const webview = document.createElement('webview');
+  webview.className = 'an-webview';
+  webview.setAttribute('src', it.link || 'about:blank');
+  webview.setAttribute('partition', 'persist:ainews'); // 独立 storage 分区，避免污染主站登录态
+  webview.addEventListener('new-window', (e) => {
+    e.preventDefault();
+    if (e.url) openUrl(e.url);
+  });
+  webviewWrap.appendChild(webview);
+  wrap.appendChild(webviewWrap);
+
+  // 右侧：笔记面板
+  const notes = el('div', 'an-notes');
+  notes.appendChild(el('div', 'an-notes-title', '📝 阅读笔记'));
+  notes.appendChild(el('div', 'an-notes-sub', it.title || '(无标题)'));
+
+  const status = el('div', 'an-notes-status', '加载中…');
+  notes.appendChild(status);
+
+  const ta = el('textarea', 'an-notes-ta');
+  ta.placeholder = '边读边记…\n按 Ctrl+Enter 快速保存';
+  ta.value = state.ain.noteDraft;
+  ta.oninput = () => { state.ain.noteDraft = ta.value; status.textContent = '未保存'; };
+  ta.onkeydown = (e) => {
+    if (e.ctrlKey && e.key === 'Enter') {
+      e.preventDefault();
+      ainSaveNote(it, ta.value, status);
+    }
+  };
+  notes.appendChild(ta);
+
+  const foot = el('div', 'an-notes-foot');
+  const saveBtn = el('button', 'tb primary', '保存笔记');
+  saveBtn.onclick = () => ainSaveNote(it, ta.value, status);
+  foot.appendChild(saveBtn);
+  notes.appendChild(foot);
+
+  // 自动保存（停止输入 1.5 秒后）
+  let debounce;
+  ta.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      if (state.ain.noteDraft.trim()) ainSaveNote(it, state.ain.noteDraft, status);
+    }, 1500);
+  });
+
+  wrap.appendChild(notes);
+  detail.appendChild(wrap);
+
+  // 加载已有笔记
+  ainLoadNote(it).then((n) => {
+    if (n && n.text != null) {
+      state.ain.noteDraft = n.text;
+      ta.value = n.text;
+      status.textContent = '已加载 · ' + (n.updatedAt ? relTime(n.updatedAt) : '本地');
+    } else {
+      status.textContent = '暂无笔记';
+    }
+  });
+}
+
+async function ainLoadNote(it) {
+  if (!it || !it.link) return null;
+  try {
+    const n = await act(API.ainews.noteGet(it.link, it.title || ''));
+    return n;
+  } catch (e) { return null; }
+}
+
+async function ainSaveNote(it, text, statusEl) {
+  if (!it || !it.link || state.ain.noteSaving) return;
+  state.ain.noteSaving = true;
+  if (statusEl) statusEl.textContent = '保存中…';
+  try {
+    const n = await act(API.ainews.noteSet(it.link, it.title || '', text));
+    if (statusEl) statusEl.textContent = n ? '已保存 · ' + (n.updatedAt ? relTime(n.updatedAt) : '刚刚') : '已清空';
+  } finally {
+    state.ain.noteSaving = false;
+  }
 }
 
 /* ---------------------------------------------------------- 交互 */

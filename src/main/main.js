@@ -147,6 +147,7 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: false,
       spellcheck: false,
+      webviewTag: true,
     },
   });
 
@@ -392,6 +393,8 @@ function registerIpc() {
   handle('ainews:set-identity', async (identityId) => aiNewsSvc.setIdentity(identityId));
   handle('ainews:toggle-source', async (sourceId, enabled) => aiNewsSvc.toggleSource(sourceId, enabled));
   handle('ainews:toggle-readlater', async (item) => aiNewsSvc.toggleReadLater(item || {}));
+  handle('ainews:note-get', async (link, title) => aiNewsSvc.getNote(aiNewsSvc.noteKey(link, title)));
+  handle('ainews:note-set', async (link, title, text) => aiNewsSvc.setNote(aiNewsSvc.noteKey(link, title), text));
 
   // ---- 文件编辑器 ----
   handle('editor:open-folder', async () => {

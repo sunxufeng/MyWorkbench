@@ -126,6 +126,8 @@ contextBridge.exposeInMainWorld('api', {
     setIdentity: (id) => invoke('ainews:set-identity', id),
     toggleSource: (id, enabled) => invoke('ainews:toggle-source', id, enabled),
     toggleReadLater: (item) => invoke('ainews:toggle-readlater', item),
+    noteGet: (link, title) => invoke('ainews:note-get', link, title),
+    noteSet: (link, title, text) => invoke('ainews:note-set', link, title, text),
   },
 
   // 拖拽进来的 File 对象 → 真实磁盘路径（Electron 32+ 不再有 File.path）

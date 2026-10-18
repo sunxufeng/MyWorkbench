@@ -4370,3 +4370,25 @@ pre.preview-md {
 .an-mgr-name { font-size: 13px; color: var(--ink-2); }
 .an-mgr-note { font-size: 11.5px; color: var(--ink-4); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .an-mode .list-head { display: none; }
+
+/* 内嵌阅读器 + 笔记 */
+.an-reader { display: flex; height: 100%; min-height: 0; background: var(--panel); }
+.an-webview-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
+.an-webview { flex: 1; width: 100%; min-height: 0; border: none; background: #fff; }
+.an-notes { width: 320px; min-width: 320px; display: flex; flex-direction: column; padding: 16px; background: var(--panel-2); }
+.an-notes-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+.an-notes-sub { font-size: 12px; color: var(--ink-4); margin-bottom: 12px; line-height: 1.45; max-height: 3.2em; overflow: hidden; }
+.an-notes-status { font-size: 11px; color: var(--ink-4); margin-bottom: 10px; min-height: 16px; }
+.an-notes-ta { flex: 1; min-height: 120px; resize: none; border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px; font-size: 13px; line-height: 1.65; color: var(--ink); background: var(--panel); font-family: inherit; }
+.an-notes-ta:focus { outline: none; border-color: var(--moss-line); box-shadow: 0 0 0 2px var(--moss-soft); }
+.an-notes-foot { margin-top: 10px; display: flex; justify-content: flex-end; }
+.an-notes-foot .tb { padding: 6px 14px; font-size: 12px; }
+
+@media (max-width: 980px) {
+  .an-reader { flex-direction: column; }
+  .an-webview-wrap { height: 55%; border-right: none; border-bottom: 1px solid var(--line); }
+  .an-notes { width: 100%; min-width: 0; height: 45%; }
+}
+
+/* webview 加载占位 */
+.an-webview-wrap:has(.an-webview:empty) { background: var(--panel-3); }
