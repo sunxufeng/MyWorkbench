@@ -30,6 +30,7 @@ const { pullFromFeishu, pushToFeishu } = require('./sync');
 const weather = require('./weather');
 const weread = require('./weread');
 const { EbookService } = require('./ebooks');
+const { AiNewsService } = require('./ai-news');
 const {
   occurrencesOn,
   occurrencesInRange,
@@ -57,6 +58,8 @@ let store = null;
 let lib = null;
 /** @type {EbookService|null} */
 let ebookSvc = null;
+/** @type {AiNewsService|null} */
+let aiNewsSvc = null;
 /** @type {FeishuClient|null} */
 let feishu = null;
 /** 这次启动是否把旧版「人生档案馆」目录改名迁移过来了 */
@@ -98,6 +101,8 @@ async function initStore() {
   await store.load();
   ebookSvc = new EbookService(store.libraryPath);
   await ebookSvc.ensureBooksDir();
+  aiNewsSvc = new AiNewsService(store.libraryPath);
+  await aiNewsSvc.ensureDir();
   return store;
 }
 
@@ -378,6 +383,15 @@ function registerIpc() {
     return { ok: false, error: '未知操作' };
   });
   handle('ebooks:search', async (id, q) => ebookSvc.search(id, q));
+
+  // ---- AI 资讯聚合（分层信源 + 身份订阅）----
+  handle('ainews:catalog', async () => aiNewsSvc.getCatalog());
+  handle('ainews:cache', async () => aiNewsSvc.getCache());
+  handle('ainews:prefs', async () => aiNewsSvc.getPrefs());
+  handle('ainews:refresh', async () => aiNewsSvc.refresh());
+  handle('ainews:set-identity', async (identityId) => aiNewsSvc.setIdentity(identityId));
+  handle('ainews:toggle-source', async (sourceId, enabled) => aiNewsSvc.toggleSource(sourceId, enabled));
+  handle('ainews:toggle-readlater', async (item) => aiNewsSvc.toggleReadLater(item || {}));
 
   // ---- 文件编辑器 ----
   handle('editor:open-folder', async () => {

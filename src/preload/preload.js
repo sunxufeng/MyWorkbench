@@ -117,6 +117,17 @@ contextBridge.exposeInMainWorld('api', {
     prefSet: (patch) => invoke('ebooks:pref-set', patch),
   },
 
+  // AI 资讯聚合（分层信源 + 身份订阅）
+  ainews: {
+    catalog: () => invoke('ainews:catalog'),
+    cache: () => invoke('ainews:cache'),
+    prefs: () => invoke('ainews:prefs'),
+    refresh: () => invoke('ainews:refresh'),
+    setIdentity: (id) => invoke('ainews:set-identity', id),
+    toggleSource: (id, enabled) => invoke('ainews:toggle-source', id, enabled),
+    toggleReadLater: (item) => invoke('ainews:toggle-readlater', item),
+  },
+
   // 拖拽进来的 File 对象 → 真实磁盘路径（Electron 32+ 不再有 File.path）
   pathForFile: (file) => {
     try {

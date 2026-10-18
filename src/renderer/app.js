@@ -449,6 +449,7 @@ function renderSidebar() {
   mk('overview', '◧', '总览', '', '');
   mk('weread', '📚', '微信读书', '', '');
   mk('ebooks', '📖', '书库', '', '');
+  mk('ainews', '🛰', 'AI 资讯', '', '');
   mk('editor', '💻', '文件编辑器', '', '');
   mk('calendar', '▦', '日历', todayN ? `${todayN} 今日` : '', '');
   mk('all', '▤', '全部资料', st.total);
@@ -628,6 +629,7 @@ function setPaneMode() {
   const wr = state.view === 'weread';
   const ed = state.view === 'editor';
   const eb = state.view === 'ebooks';
+  const an = state.view === 'ainews';
   const app = $('#app');
   if (app) {
     app.classList.toggle('cal-mode', cal);
@@ -635,11 +637,12 @@ function setPaneMode() {
     app.classList.toggle('wr-mode', wr);
     app.classList.toggle('ed-mode', ed);
     app.classList.toggle('eb-mode', eb);
+    app.classList.toggle('an-mode', an);
   }
   const head = $('#calHead');
   if (head) head.classList.toggle('hidden', !cal);
   const lh = $('#listHead');
-  if (lh) lh.classList.toggle('hidden', cal || ov || wr || ed || eb);
+  if (lh) lh.classList.toggle('hidden', cal || ov || wr || ed || eb || an);
   const sb = $('#listScroll');
   if (sb) sb.classList.toggle('cal-scroll', cal);
   const si = $('#searchInput');
@@ -663,6 +666,13 @@ function renderList() {
         if (state.view === 'ebooks') { renderEbooksLibrary(); renderEbooksDetail(); }
       })
     );
+    return;
+  }
+  if (state.view === 'ainews') {
+    renderAiNewsList();
+    ainEnsureLoaded().then(() => {
+      if (state.view === 'ainews') { renderAiNewsList(); renderAiNewsDetail(); }
+    });
     return;
   }
   if (state.view === 'editor') return renderEditorList();
@@ -2185,6 +2195,7 @@ function renderDetail() {
   if (state.view === 'weread') return renderWereadDetail();
   if (state.view === 'ebooks') return renderEbooksDetail();
   if (state.view === 'editor') return renderEditorDetail();
+  if (state.view === 'ainews') return renderAiNewsDetail();
   if (state.editing) return renderEditor();
   const e = state.entries.find((x) => x.id === state.selectedId);
 
